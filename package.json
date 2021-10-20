@@ -10,13 +10,15 @@
     "remove": "sst remove"
   },
   "devDependencies": {
-    "@aws-cdk/assert": "1.125.0"
+    "@aws-cdk/assert": "1.126.0"
   },
   "dependencies": {
-    "@aws-cdk/aws-s3": "1.125.0",
-    "@aws-cdk/aws-s3-deployment": "1.125.0",
-    "@aws-cdk/core": "1.125.0",
-    "@serverless-stack/cli": "0.45.2",
-    "@serverless-stack/resources": "0.45.2"
+    "@aws-cdk/aws-s3": "1.126.0",
+    "@aws-cdk/aws-s3-deployment": "1.126.0",
+    "@aws-cdk/aws-ssm": "1.126.0",
+    "@aws-cdk/core": "1.126.0",
+    "@aws-sdk/client-ssm": "^3.37.0",
+    "@serverless-stack/cli": "0.48.0",
+    "@serverless-stack/resources": "0.48.0"
   }
 }

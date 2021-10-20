@@ -8,6 +8,7 @@ const {
 const region = "us-east-1";
 const bucketName =
   process.env.BUCKET_NAME_FOR_LOCALHOST || process.env.BUCKET_NAME;
+const testVar = process.env.TEST_VAR;
 const bucketParams = { Bucket: bucketName };
 const prefix = "blog/";
 const listParams = { ...bucketParams, Prefix: prefix };
@@ -35,7 +36,7 @@ const getPost = async (id) => {
 };
 
 const getPostKeys = async () => {
-  console.log({ bucketName });
+  console.log({ bucketName, testVar });
   if (!bucketName || bucketName.slice(0, 3) === "{{ ") return []; // fail safe
   const s3Response = await s3.send(new ListObjectsV2Command(listParams));
   return s3Response.Contents.map(({ Key }) => Key.slice(prefix.length)).sort();
