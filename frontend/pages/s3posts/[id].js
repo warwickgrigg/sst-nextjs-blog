@@ -51,7 +51,7 @@ export async function getStaticPaths() {
 
 export async function getStaticProps({ params }) {
   const post = await getPost(params.id);
-  console.log({ post });
+  console.log({ bucketName, testVar, post });
   return post ? { props: { post } } : { notFound: true };
 }
 
