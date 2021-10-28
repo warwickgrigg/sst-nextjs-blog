@@ -1,34 +1,15 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+Technical, experimental proof of concept for Nextjs blog, deployed to AWS very nicely via Serverless Stack, with hybrid SSG/SSR posts derived from AWS S3 objects, {fallback: "blocking"}.
 
-## Getting Started
+Visuals and end user UI are not pretty at this stage.
 
-First, run the development server:
+To install, npm install, in root directory and frontend directory.
 
-```bash
-npm run dev
-# or
-yarn dev
-```
+To deploy, npx sst deploy --stage mystagename
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+When deploying to a stage for the first time you should repeat the deployment operation
 
-You can start editing the page by modifying `pages/index.js`. The page auto-updates as you edit the file.
+SSG paths: memposts/a.txt and s3posts/a.txt
 
-[API routes](https://nextjs.org/docs/api-routes/introduction) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.js`.
+SSR paths: memposts/b.txt, memposts/c.txt, s3posts/b.txt and s3posts/c.txt
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/api-routes/introduction) instead of React pages.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+Refer to documentation for Serverless Stack and Nextjs for more info.

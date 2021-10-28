@@ -4,8 +4,8 @@ const {
   GetObjectCommand,
 } = require("@aws-sdk/client-s3");
 
-// const region = process.env.REGION;
-const region = "us-east-1";
+const region = process.env.REGION;
+// const region = "us-east-1";
 const bucketName =
   process.env.BUCKET_NAME_FOR_LOCALHOST || process.env.BUCKET_NAME;
 const testVar = process.env.TEST_VAR;

@@ -1,4 +1,4 @@
-import MyStack from "./MyStack";
+import BlogStack from "./BlogStack";
 const { SSMClient, GetParameterCommand } = require("@aws-sdk/client-ssm");
 
 const getParameter = async (paramName, region) => {
@@ -29,7 +29,7 @@ export default async function main(app) {
 
   console.log({ ssmParamName, bucketName });
 
-  new MyStack(app, "my-stack", { ssmParamName, bucketName });
+  new BlogStack(app, "BlogStack", { ssmParamName, bucketName });
 
   // Add more stacks
 }

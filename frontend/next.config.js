@@ -1,6 +1,9 @@
 module.exports = {
   env: {
-    // MY_PROD_VAR: process.env.MY_PROD_VAR,
+    // temporary workaround
+    REGION: process.env.REGION,
+    BUCKET_NAME: process.env.BUCKET_NAME,
+    TEST_VAR: process.env.TEST_VAR,
     BUCKET_NAME_FOR_LOCALHOST: process.env.BUCKET_NAME_FOR_LOCALHOST,
   },
   reactStrictMode: true,
