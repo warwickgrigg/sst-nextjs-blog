@@ -1,17 +1,5 @@
-const {
-  S3Client,
-  ListObjectsV2Command,
-  GetObjectCommand,
-} = require("@aws-sdk/client-s3");
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import {
-  DynamoDBDocumentClient,
-  GetCommand,
-  PutCommand,
-  QueryCommand,
-  UpdateCommand,
-  TransactWriteCommand,
-} from "@aws-sdk/lib-dynamodb";
+const { S3Client, GetObjectCommand } = require("@aws-sdk/client-s3");
+
 import udb from "./lib/udb.js";
 
 // const region = process.env.REGION;
@@ -47,33 +35,23 @@ const handle = (promise) =>
 const seq = (s) => ("00000" + (parseInt(s) || 0)).slice(-6);
 
 const mySchema = {
-  ddb: {
-    DynamoDBClient,
-    DynamoDBDocumentClient,
-    GetCommand,
-    PutCommand,
-    QueryCommand,
-    UpdateCommand,
-    TransactWriteCommand,
-  },
   region,
   table: ddbTable,
-  keys: ["pk", "sk"],
-  timestamps: ["_created", "_modified"],
   entities: {
     post: {
       calc: {
         pk: ({ postType }) => `postType#${postType}`,
         sk: ({ id }) => `seq#${seq(id)}#post#${id}`,
       },
-      transform: ({ postType, id, ...data }) => [
-        { postType, id, ...data },
-        ...(!data.tags
+      transform: ({ postType, id, tags, ...data }) => [
+        { postType, id, ...data, tags },
+        ...(!tags
           ? []
-          : data.tags.split(",").map((tag) => ({
+          : tags.split(",").map((tag) => ({
               entityType: "postTag",
               postType,
               tag: tag.trim(),
+              tags,
               id,
             }))),
       ],
@@ -102,6 +80,12 @@ async function processObject(bucket, key) {
   const updated = await db.put(written);
   const fetched = await db.get(data);
   const gotAll = await db.query(data);
+  await db.delete({
+    entityType: "post",
+    postType: "blog",
+    id: "a.txt",
+    tags: "mytag, othertag",
+  });
   return [data, written, updated, fetched, gotAll];
 }
 

@@ -6,7 +6,6 @@
    Example schema
 
 const schema = {
-  ddb: {}, // placeholder - dynamodb imports
   table: "", // placeholder - table name
   keys: ["pk", "sk"], // default - could also include gpk1 etc
   timestamps: ["_created", "_modified"], // default
@@ -34,52 +33,75 @@ const schema = {
 
 */
 
-const udb = (schema) => {
-  const ddbClient = new schema.ddb.DynamoDBClient(schema.region);
-  const docClient = schema.ddb.DynamoDBDocumentClient.from(ddbClient);
-  const db = { ...schema, ddbClient, docClient };
+// https://serverless.pub/migrating-to-aws-sdk-v3/
+// https://betterdev.blog/aws-javascript-sdk-v3-usage-problems-testing/
 
-  const { GetCommand, PutCommand } = db.ddb;
-  const { QueryCommand, UpdateCommand, TransactWriteCommand } = db.ddb;
+import { marshall, unmarshall } from "@aws-sdk/util-dynamodb";
+import {
+  DynamoDBClient,
+  GetItemCommand,
+  DeleteItemCommand,
+  PutItemCommand,
+  QueryCommand,
+  UpdateItemCommand,
+} from "@aws-sdk/client-dynamodb";
+
+const udb = (schema) => {
+  const db = {
+    keys: ["pk", "sk"], // default - could also include gpk1 etc
+    timestamps: ["_created", "_modified"], // default
+    ...schema,
+  };
+  const ddbClient = new DynamoDBClient(db.region);
+  const dbDo = (Command, ...params) => ddbClient.send(new Command(...params));
+
+  const clean = (ddbReturnItem) => {
+    // Remove calculated attributes, return unmarshalled
+    const data = unmarshall(ddbReturnItem);
+    const { calc } = db.entities[data.entityType];
+    if (!calc) return data;
+    const tuples = Object.entries(data).filter(([k]) => !calc[k]);
+    return Object.fromEntries(tuples);
+  };
 
   db.getKeys = (data) => {
     const tuples = Object.entries(db.entities[data.entityType].calc);
     return Object.fromEntries(tuples.map(([k, f]) => [k, f(data)]));
   };
 
+  db.get = async (data) => {
+    const params = { TableName: db.table, Key: marshall(db.getKeys(data)) };
+    return clean((await dbDo(GetItemCommand, params)).Item);
+  };
+
   db.put = async (data) => {
-    const params = { TableName: db.table };
+    const TableName = db.table;
     const [ctd, mod] = db.timestamps;
     const created = data[ctd];
-    const timeStamp = { [created ? mod : ctd]: Date.now() };
+    const stamp = { [created ? mod : ctd]: Date.now() };
     const { transform } = db.entities[data.entityType];
-    const items = transform ? transform(data) : [data];
-    const bodies = items.map((item) => ({
-      ...item,
-      [ctd]: created, // propagate to all related items
-      ...timeStamp,
-    }));
+    const items = [].concat(transform ? transform(data) : data).map((item) => {
+      return { ...item, [ctd]: created, ...stamp }; // timestamped
+    });
     // Maybe should use transact if more than one item
     await Promise.all(
-      bodies.map((body) => {
-        const Item = { ...db.getKeys(body), ...body };
-        return docClient.send(new PutCommand({ ...params, Item }));
+      items.map((item) => {
+        const Item = marshall({ ...db.getKeys(item), ...item });
+        return dbDo(PutItemCommand, { TableName, Item });
       })
     );
-    return bodies[0];
+    return items[0];
   };
 
-  const clean = (data) => {
-    // Remove calculated attributes
-    const { calc } = db.entities[data.entityType];
-    const tuples = Object.entries(data).filter(([k]) => !calc[k]);
-    return Object.fromEntries(tuples);
-  };
-
-  db.get = async (data) => {
-    const keys = db.getKeys(data);
-    const params = { TableName: db.table, Key: keys };
-    return clean((await docClient.send(new GetCommand(params))).Item);
+  db.delete = async (data) => {
+    const TableName = db.table;
+    const { transform } = db.entities[data.entityType];
+    const items = [].concat(transform ? transform(data) : data);
+    return Promise.all(
+      items.map((item) =>
+        dbDo(DeleteItemCommand, { TableName, Key: marshall(db.getKeys(item)) })
+      )
+    );
   };
 
   db.query = async (data, params) => {
@@ -88,18 +110,19 @@ const udb = (schema) => {
     const allP = {
       TableName: db.table,
       KeyConditionExpression: "pk = :pk",
-      ExpressionAttributeValues: { ":pk": calc[pk](data) },
+      ExpressionAttributeValues: marshall({ ":pk": calc[pk](data) }),
       ...params,
     };
-    return (await docClient.send(new QueryCommand(allP))).Items.map(clean);
+    return (await dbDo(QueryCommand, allP)).Items.map(clean);
   };
 
-  db.update = async (data, params) => {
-    const allP = { TableName: db.table, Key: db.getKeys(data), ...params };
-    return docClient.send(new UpdateCommand(allP));
+  db.update = async (data, options) => {
+    const TableName = db.table;
+    const Key = marshall(db.getKeys(data));
+    return dbDo(UpdateItemCommand, { TableName, Key, ...options });
   };
 
-  db.transact = async (ops) => docClient.send(new TransactWriteCommand(ops));
+  db.transact = async (x) => x; // (ops) => dcDo(TransactWriteCommand, ops);
 
   return db;
 };
