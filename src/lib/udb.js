@@ -48,7 +48,11 @@ import {
 
 const udb = (schema) => {
   const db = {
-    keys: ["pk", "sk"], // default - could also include gpk1 etc
+    indexes: {
+      primaryIndex: ["pk", "sk"],
+      // gsi1: ["gsi1pk", "gsi1sk"],
+      // gsi2: ["gsi2pk", "gsi2sk"],
+    },
     timestamps: ["_created", "_modified"], // default
     ...schema,
   };
@@ -64,17 +68,34 @@ const udb = (schema) => {
     return Object.fromEntries(tuples);
   };
 
-  db.getKeys = (data) => {
-    const tuples = Object.entries(db.entities[data.entityType].calc);
-    return Object.fromEntries(tuples.map(([k, f]) => [k, f(data)]));
+  // const pick = (obj, keys) => Object.fromEntries(keys.map((k) => [k, obj[k]]));
+
+  /*
+  const intersection(array1, array2) =>  {
+    const set = new Set(array2);
+    return Array.from(new Set(array1.filter(elem => set.has(elem))));
+  };
+  */
+
+  const getKeys = (data, names) => {
+    const calcs = db.entities[data.entityType].calc;
+    const r = {};
+    //(names || [].concat(...db.keys)).forEach((k) => {
+    (names || [].concat(...Object.values(db.indexes))).forEach((k) => {
+      if (data[k]) r[k] = data[k];
+      else if (calcs[k]) r[k] = calcs[k](data);
+    });
+    return r;
   };
 
-  db.get = async (data) => {
-    const params = { TableName: db.table, Key: marshall(db.getKeys(data)) };
+  const withKeys = (data, keys) => ({ ...data, ...getKeys(data, keys) });
+
+  const get = async (data) => {
+    const params = { TableName: db.table, Key: marshall(getKeys(data)) };
     return clean((await dbDo(GetItemCommand, params)).Item);
   };
 
-  db.put = async (data) => {
+  const put = async (data) => {
     const TableName = db.table;
     const [ctd, mod] = db.timestamps;
     const created = data[ctd];
@@ -83,48 +104,74 @@ const udb = (schema) => {
     const items = [].concat(transform ? transform(data) : data).map((item) => {
       return { ...item, [ctd]: created, ...stamp }; // timestamped
     });
-    // Maybe should use transact if more than one item
+    // Maybe should use batchWrite if more than one item
     await Promise.all(
-      items.map((item) => {
-        const Item = marshall({ ...db.getKeys(item), ...item });
-        return dbDo(PutItemCommand, { TableName, Item });
-      })
+      items.map((item) =>
+        dbDo(PutItemCommand, { TableName, Item: marshall(withKeys(item)) })
+      )
     );
     return items[0];
   };
 
-  db.delete = async (data) => {
+  const del = async (data) => {
     const TableName = db.table;
     const { transform } = db.entities[data.entityType];
     const items = [].concat(transform ? transform(data) : data);
     return Promise.all(
       items.map((item) =>
-        dbDo(DeleteItemCommand, { TableName, Key: marshall(db.getKeys(item)) })
+        dbDo(DeleteItemCommand, { TableName, Key: marshall(getKeys(item)) })
       )
     );
   };
 
-  db.query = async (data, params) => {
-    const { calc } = db.entities[data.entityType];
-    const pk = db.keys[0];
-    const allP = {
-      TableName: db.table,
-      KeyConditionExpression: "pk = :pk",
-      ExpressionAttributeValues: marshall({ ":pk": calc[pk](data) }),
-      ...params,
-    };
-    return (await dbDo(QueryCommand, allP)).Items.map(clean);
+  const mkExpAtt = (data) => {
+    const placeholders = [],
+      names = {},
+      values = {};
+    Object.keys(data).forEach((key) => {
+      placeholders.push([`#${key}`, `:${key}`]);
+      names[`#${key}`] = key;
+      values[`:${key}`] = data[key];
+    });
+    return [placeholders, names, values];
   };
 
-  db.update = async (data, options) => {
+  // const qAll = (data, keys = [db.keys[0][0]]) => {
+  const qAll = (data, keys = [db.indexes.primaryIndex[0]]) => {
+    const [placeholders, names, values] = mkExpAtt(getKeys(data, keys));
+    console.log({ placeholders, names, values });
+    return {
+      KeyConditionExpression: placeholders
+        .map((p) => p.join(" = "))
+        .join(" and "),
+      ExpressionAttributeNames: names,
+      ExpressionAttributeValues: marshall(values),
+    };
+  };
+
+  const query = async (params) =>
+    (await dbDo(QueryCommand, params)).Items.map(clean);
+
+  const update = async (data, options) => {
     const TableName = db.table;
-    const Key = marshall(db.getKeys(data));
+    const Key = marshall(getKeys(data));
     return dbDo(UpdateItemCommand, { TableName, Key, ...options });
   };
 
-  db.transact = async (x) => x; // (ops) => dcDo(TransactWriteCommand, ops);
+  const transact = async (x) => x; // (ops) => dcDo(TransactWriteCommand, ops);
 
-  return db;
+  return {
+    get,
+    put,
+    del,
+    query,
+    update,
+    transact,
+    qAll,
+    getKeys,
+    withKeys,
+    marshall,
+  };
 };
 
 export default udb;

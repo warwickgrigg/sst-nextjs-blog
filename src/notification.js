@@ -37,6 +37,11 @@ const seq = (s) => ("00000" + (parseInt(s) || 0)).slice(-6);
 const mySchema = {
   region,
   table: ddbTable,
+  indexes: {
+    primaryIndex: ["pk", "sk"],
+    // gsi1: ["gsi1pk", "gsi1sk"],
+    // gsi2: ["gsi2pk", "gsi2sk"],
+  },
   entities: {
     post: {
       calc: {
@@ -63,6 +68,7 @@ const mySchema = {
       },
     },
   },
+  queries: {},
 };
 
 const db = udb(mySchema);
@@ -79,13 +85,30 @@ async function processObject(bucket, key) {
   const written = await db.put(data);
   const updated = await db.put(written);
   const fetched = await db.get(data);
-  const gotAll = await db.query(data);
-  await db.delete({
+  const qParams = {
+    TableName: ddbTable,
+    ...db.qAll(data),
+  };
+  console.log({ qParams });
+  const gotAll = await db.query(qParams);
+  const tagQuery = {
+    entityType: "postTag",
+    postType: "blog",
+    tag: "mytag",
+  };
+  const tagParams = db.qAll(tagQuery);
+  console.log({ tagParams });
+  const gotTagged = await db.query({ TableName: ddbTable, ...tagParams });
+  console.log({ gotTagged });
+  const bRec = {
     entityType: "post",
     postType: "blog",
-    id: "a.txt",
+    id: "b.txt",
     tags: "mytag, othertag",
-  });
+  };
+  await db.del(bRec);
+  //const keys = db.getKeys(bRec);
+
   return [data, written, updated, fetched, gotAll];
 }
 
