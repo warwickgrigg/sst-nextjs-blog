@@ -153,7 +153,7 @@ const udb = (schema) => {
       { placeholders: [], names: {}, values: {} }
     );
 
-  const query = async (data, params) => {
+  const query = async (data, paramFactory) => {
     const { names, values, placeholders: p } = attributes(data);
     const exp1 = `${p[0][0]} = ${p[0][1]}`;
     const exp2 = p[1] ? ` AND begins_with(${p[1][0]}, ${p[1][1]})` : "";
@@ -163,18 +163,19 @@ const udb = (schema) => {
       KeyConditionExpression: expression,
       ExpressionAttributeNames: names,
       ExpressionAttributeValues: marshall(values),
-      ...params,
+      ...(paramFactory && paramFactory({ names, values, placeholders: p })),
     };
     const response = await dbDo(QueryCommand, allParams);
     const items = response.Items.map((item) => clean(unmarshall(item)));
     return { items, response, names, values, expression };
   };
 
-  const update = async (data, params) => {
-    const TableName = db.table;
-    const Key = marshall(getKeys(data));
-    return dbDo(UpdateItemCommand, { TableName, Key, ...params });
-  };
+  const update = async (data, paramFactory) =>
+    dbDo(UpdateItemCommand, {
+      TableName: db.table,
+      Key: marshall(getKeys(data)),
+      ...(paramFactory && paramFactory(attributes(data))),
+    });
 
   return { get, put, del, query, update, getKeys, attributes, marshall, dbDo };
 };
