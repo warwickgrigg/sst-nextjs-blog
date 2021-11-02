@@ -157,17 +157,17 @@ const udb = (schema) => {
     const { names, values, placeholders: p } = attributes(data);
     const exp1 = `${p[0][0]} = ${p[0][1]}`;
     const exp2 = p[1] ? ` AND begins_with(${p[1][0]}, ${p[1][1]})` : "";
-    const KeyConditionExpression = exp1 + exp2;
+    const expression = exp1 + exp2;
     const allParams = {
       TableName: db.table,
-      KeyConditionExpression,
+      KeyConditionExpression: expression,
       ExpressionAttributeNames: names,
       ExpressionAttributeValues: marshall(values),
       ...params,
     };
     const response = await dbDo(QueryCommand, allParams);
     const items = response.Items.map((item) => clean(unmarshall(item)));
-    return { items, response, names, values, KeyConditionExpression };
+    return { items, response, names, values, expression };
   };
 
   const update = async (data, params) => {
