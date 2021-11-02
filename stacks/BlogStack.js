@@ -17,29 +17,40 @@ export default class MyStack extends Stack {
     const { ssmParamName, bucketName = "" } = props;
     console.log({ ssmParamName, bucketName });
 
+    /*
+    const projectionType = ProjectionType.INCLUDE;
+    const indexProps = { nonKeyAttributes: ["nk"], projectionType };
+    const globalIndexes = {
+      gsk1: { partitionKey: "gsk1pk", sortKey: "gsk1sk" },
+    };
+    const gskfields = {gsk1pk: dbStringType, gsk1sk: dbStringType};
+    */
+
+    const dbStringType = TableFieldType.STRING;
     const table = new Table(this, "Blog", {
-      fields: { pk: TableFieldType.STRING, sk: TableFieldType.STRING },
-      primaryIndex: {
-        partitionKey: "pk",
-        sortKey: "sk",
-        /*
-        indexProps: {
-          nonKeyAttributes: ["nk"],
-          projectionType: ProjectionType.INCLUDE,
-        },
-        */
-      },
+      fields: { pk: dbStringType, sk: dbStringType },
+      primaryIndex: { partitionKey: "pk", sortKey: "sk" /*indexProps*/ },
+      /* globalIndexes: */
       dynamodbTable: {
         removalPolicy: RemovalPolicy.DESTROY,
       },
     });
+
+    const environment = {
+      REGION: scope.region,
+      TABLE_NAME: table.tableName,
+      TEST_VAR: "TEST_VAR contents",
+    };
 
     // Define the content bucket
 
     const contentBucket = new Bucket(this, "contentBucket", {
       notifications: [
         {
-          function: "src/notification.main",
+          function: {
+            handler: "src/notification.main",
+            environment,
+          },
           notificationProps: {
             events: [EventType.OBJECT_CREATED],
           },
@@ -59,12 +70,17 @@ export default class MyStack extends Stack {
       destinationKeyPrefix: "blog", // optional prefix in destination bucket
     });
 
+    environment.BUCKET_NAME = contentBucket.bucketName;
+
+    this.addOutputs({ BUCKET_NAME: contentBucket.bucketName });
+
     // Define the ssm paramter
     new ssm.StringParameter(this, "ContentBucketNameParameter", {
       parameterName: ssmParamName,
       stringValue: contentBucket.bucketName,
     });
 
+    /*
     // Define the Next.js site
     const site = new NextjsSite(this, "Site", {
       path: "frontend",
@@ -82,10 +98,10 @@ export default class MyStack extends Stack {
     // Show the site URL and content bucket name in the output
     this.addOutputs({
       URL: site.url,
-      BUCKET_NAME: contentBucket.bucketName,
       MESSAGE: bucketName
         ? ""
         : "Rerun 'sst deploy' to generate static pages from s3 bucket",
     });
+    */
   }
 }

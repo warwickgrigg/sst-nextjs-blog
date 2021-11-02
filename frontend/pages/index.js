@@ -1,3 +1,5 @@
+/*
+
 const { SSMClient, GetParameterCommand } = require("@aws-sdk/client-ssm");
 
 const getParameter = async (paramName, region) => {
@@ -13,6 +15,7 @@ const getParameter = async (paramName, region) => {
     .then((r) => [r.Parameter.Value, undefined])
     .catch((e) => [undefined, e]);
 };
+*/
 
 export default function App() {
   return <div className="App">Home page</div>;

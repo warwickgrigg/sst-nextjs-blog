@@ -1,6 +1,6 @@
 {
   "name": "nextjs-blog",
-  "region": "us-east-1",
+  "region": "eu-west-2",
   "lint": true,
   "main": "stacks/index.js"
 }

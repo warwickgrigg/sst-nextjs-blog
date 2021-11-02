@@ -1,15 +1,15 @@
-const { S3Client, GetObjectCommand } = require("@aws-sdk/client-s3");
-
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import udb from "./lib/udb.js";
 
-// const region = process.env.REGION;
-const region = "us-east-1";
-
 // https://serverless.pub/migrating-to-aws-sdk-v3/
+// https://betterdev.blog/aws-javascript-sdk-v3-usage-problems-testing/
+
+// const region = "us-east-1"
+const region = process.env.REGION;
+// const ddbTable = "testa-nextjs-blog-Blog";
+const ddbTable = process.env.TABLE_NAME;
 
 const s3 = new S3Client({ region });
-
-const ddbTable = "testa-nextjs-blog-Blog";
 
 const getObject = async (bucketName, key) => {
   const chunks = [];
@@ -37,16 +37,16 @@ const seq = (s) => ("00000" + (parseInt(s) || 0)).slice(-6);
 const mySchema = {
   region,
   table: ddbTable,
-  indexes: {
-    primaryIndex: ["pk", "sk"],
-    // gsi1: ["gsi1pk", "gsi1sk"],
-    // gsi2: ["gsi2pk", "gsi2sk"],
-  },
+  indexes: [
+    ["pk", "sk"],
+    ["gsi1pk", "gsi1sk"],
+    ["gsi2pk", "gsi2sk"],
+  ],
   entities: {
     post: {
       calc: {
         pk: ({ postType }) => `postType#${postType}`,
-        sk: ({ id }) => `seq#${seq(id)}#post#${id}`,
+        sk: ({ id }) => `seq#${seq(id)}#post#${id}#`,
       },
       transform: ({ postType, id, tags, ...data }) => [
         { postType, id, ...data, tags },
@@ -64,7 +64,7 @@ const mySchema = {
     postTag: {
       calc: {
         pk: ({ postType, tag }) => `postType#${postType}#tag#${tag}`,
-        sk: ({ id }) => `seq#${seq(id)}#post#${id}`,
+        sk: ({ id }) => `seq#${seq(id)}#post#${id}#`,
       },
     },
   },
@@ -82,23 +82,18 @@ async function processObject(bucket, key) {
     tags: "mytag, othertag",
     title: content,
   };
-  const written = await db.put(data);
+  const written = await db.put([data]);
   const updated = await db.put(written);
   const fetched = await db.get(data);
-  const qParams = {
-    TableName: ddbTable,
-    ...db.qAll(data),
-  };
-  console.log({ qParams });
-  const gotAll = await db.query(qParams);
+  const { items: gotAll } = await db.query(db.getKeys(data, ["pk", "sk"]));
+  console.log({ data, written, updated, fetched, gotAll });
   const tagQuery = {
     entityType: "postTag",
     postType: "blog",
     tag: "mytag",
   };
-  const tagParams = db.qAll(tagQuery);
-  console.log({ tagParams });
-  const gotTagged = await db.query({ TableName: ddbTable, ...tagParams });
+  const { items: gotTagged } = await db.query(db.getKeys(tagQuery, ["pk"]));
+
   console.log({ gotTagged });
   const bRec = {
     entityType: "post",
@@ -106,7 +101,8 @@ async function processObject(bucket, key) {
     id: "b.txt",
     tags: "mytag, othertag",
   };
-  await db.del(bRec);
+  const deleted = await db.del(bRec);
+  console.log({ deleted });
   //const keys = db.getKeys(bRec);
 
   return [data, written, updated, fetched, gotAll];
