@@ -1,5 +1,5 @@
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
-import { udb, dh, beginsWith } from "./lib/udb.js";
+import { udb, dh, keyCondition, beginsWith } from "./lib/udb.js";
 
 // https://serverless.pub/migrating-to-aws-sdk-v3/
 // https://betterdev.blog/aws-javascript-sdk-v3-usage-problems-testing/
@@ -86,14 +86,18 @@ async function processObject(bucket, key) {
   console.log({ written });
   const updated = await db.put(written);
   const fetched = await db.get(data);
-  const [gotAll] = await db.query(beginsWith(db.getKeys(data, ["pk", "sk"])));
+  const [gotAll] = await db.query(
+    keyCondition(beginsWith, db.getKeys(data, ["pk", "sk"]))
+  );
   console.log({ data, written, updated, fetched, gotAll });
   const tagQuery = {
     entityType: "postTag",
     postType: "blog",
     tag: "mytag",
   };
-  const [gotTagged] = await db.query(beginsWith(db.getKeys(tagQuery, ["pk"])));
+  const [gotTagged] = await db.query(
+    keyCondition(beginsWith, db.getKeys(tagQuery, ["pk"]))
+  );
 
   console.log({ gotTagged });
   const bRec = {

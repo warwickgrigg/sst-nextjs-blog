@@ -79,15 +79,16 @@ const attributes = (data) =>
     { placeholders: [], names: {}, values: {} }
   );
 
-const beginsWith = (keys, params) => {
+const beginsWith = (k) => (k ? ` AND begins_with(${k[0]}, ${k[1]})` : "");
+const op = (binop) => (k) => k ? ` AND ${k[0]} ${binop} ${k[1]}` : "";
+
+const keyCondition = (condition, keys) => {
   const { names, values, placeholders } = attributes(keys);
-  const [pk, sk] = placeholders;
-  const exp = sk ? ` AND begins_with(${sk[0]}, ${sk[1]})` : "";
+  const [pk, ...sk] = placeholders;
   return {
-    KeyConditionExpression: `${pk[0]} = ${pk[1]}` + exp,
+    KeyConditionExpression: `${pk[0]} = ${pk[1]}` + condition(...sk),
     ExpressionAttributeNames: names,
     ExpressionAttributeValues: marshall(values),
-    ...params,
   };
 };
 
@@ -201,4 +202,4 @@ const udb = (schema) => {
   return { get, put, del, query, update, getKeys, dbDo };
 };
 
-export { udb, dh, dehash, attributes, beginsWith };
+export { udb, dh, dehash, attributes, keyCondition, beginsWith, op };
