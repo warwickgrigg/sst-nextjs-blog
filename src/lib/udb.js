@@ -8,7 +8,7 @@
 const schema = {
   region,
   table: "", // placeholder - table name
-  indexes: [["pk", "sk"],], // default - could also include [gsk1pk, gsk2sk] etc
+  indexes: {primaryIndex: ["pk", "sk"]}, // default. maybe also ... gsi1:[], gsi2:[] etc
   timestamps: ["_created", "_modified"], // default
   entities: {
     // examples
@@ -42,6 +42,7 @@ import {
   DeleteItemCommand,
   PutItemCommand,
   BatchWriteItemCommand,
+  BatchGetItemCommand,
   QueryCommand,
   UpdateItemCommand,
 } from "@aws-sdk/client-dynamodb";
@@ -55,15 +56,46 @@ import {
   };
 */
 
+const dehash = (s, hash = "#", escape = "\\") =>
+  s.replace(escape, escape + escape).replace(hash, escape + "d");
+
+const dh = (strings, ...keys) => {
+  const r = [];
+  for (let i = 0; i < strings.length; i += 1) {
+    r.push(strings[i]);
+    if (i < keys.length) r.push(dehash(keys[i]));
+  }
+  return r.join("");
+};
+
+const attributes = (data) =>
+  Object.keys(data).reduce(
+    (r, k) => {
+      r.placeholders.push([`#${k}`, `:${k}`]);
+      r.names[`#${k}`] = k;
+      r.values[`:${k}`] = data[k];
+      return r;
+    },
+    { placeholders: [], names: {}, values: {} }
+  );
+
+const beginsWith = (keys, params) => {
+  const { names, values, placeholders } = attributes(keys);
+  const [pk, sk] = placeholders;
+  const exp = sk ? ` AND begins_with(${sk[0]}, ${sk[1]})` : "";
+  return {
+    KeyConditionExpression: `${pk[0]} = ${pk[1]}` + exp,
+    ExpressionAttributeNames: names,
+    ExpressionAttributeValues: marshall(values),
+    ...params,
+  };
+};
+
 const toArray = (a) => (Array.isArray(a) ? a : [a]);
 
 const udb = (schema) => {
   const db = {
-    indexes: [
-      ["pk", "sk"],
-      // ["gsi1pk", "gsi1sk"],
-      // ["gsi2pk", "gsi2sk"],
-    ],
+    indexes: { primaryIndex: ["pk", "sk"] },
     timestamps: ["_created", "_modified"], // default
     ...schema,
   };
@@ -77,21 +109,21 @@ const udb = (schema) => {
     return Object.fromEntries(tuples);
   };
 
-  const getKeys = (data, names) => {
+  const getKeyTuples = (data, names) => {
     const calcs = db.entities[data.entityType].calc;
-    return (names || db.indexes.flat()).reduce((r, k) => {
-      if (data[k]) r[k] = data[k];
-      else if (calcs[k]) r[k] = calcs[k](data);
-      return r;
-    }, {});
+    const r = [];
+    (names || Object.values(db.indexes).flat()).forEach((k) => {
+      if (k in data) r.push([k, data[k]]);
+      else if (k in calcs) r.push([k, calcs[k](data)]);
+    });
+    return r;
   };
+
+  const getKeys = (...args) => Object.fromEntries(getKeyTuples(...args));
+
+  const getPrimaryKey = (data) => getKeys(data, db.indexes.primaryIndex);
 
   const withKeys = (data) => ({ ...data, ...getKeys(data) });
-
-  const get = async (data) => {
-    const params = { TableName: db.table, Key: marshall(getKeys(data)) };
-    return clean(unmarshall((await dbDo(GetItemCommand, params)).Item));
-  };
 
   const stamps = (data) => {
     const [ctd, mod] = db.timestamps;
@@ -108,7 +140,7 @@ const udb = (schema) => {
     });
     return {
       dataToWrite: stamped.flatMap((a) => a.map(withKeys)),
-      stamped: stamped.map((i) => i[0]),
+      roots: stamped.map((i) => i[0]),
     };
   };
 
@@ -125,59 +157,48 @@ const udb = (schema) => {
   };
 
   const put = async (data) => {
-    const { stamped, dataToWrite } = toWrite(data);
+    const { roots, dataToWrite } = toWrite(data);
     const requestItems = dataToWrite.map((item) => ({
       PutRequest: { Item: marshall(item) },
     }));
     await doBatchWrite(requestItems);
-    return stamped;
+    return roots;
   };
 
   const del = async (data) => {
-    const { stamped, dataToWrite } = toWrite(data);
+    const { roots, dataToWrite } = toWrite(data);
     const requestItems = dataToWrite.map((item) => ({
-      DeleteRequest: { Key: marshall(getKeys(item)) },
+      DeleteRequest: { Key: marshall(getPrimaryKey(item)) },
     }));
     await doBatchWrite(requestItems);
-    return stamped;
+    return roots;
   };
 
-  const attributes = (data) =>
-    Object.keys(data).reduce(
-      (r, k) => {
-        r.placeholders.push([`#${k}`, `:${k}`]);
-        r.names[`#${k}`] = k;
-        r.values[`:${k}`] = data[k];
-        return r;
-      },
-      { placeholders: [], names: {}, values: {} }
-    );
-
-  const query = async (data, paramFactory) => {
-    const { names, values, placeholders: p } = attributes(data);
-    const exp1 = `${p[0][0]} = ${p[0][1]}`;
-    const exp2 = p[1] ? ` AND begins_with(${p[1][0]}, ${p[1][1]})` : "";
-    const expression = exp1 + exp2;
-    const allParams = {
-      TableName: db.table,
-      KeyConditionExpression: expression,
-      ExpressionAttributeNames: names,
-      ExpressionAttributeValues: marshall(values),
-      ...(paramFactory && paramFactory({ names, values, placeholders: p })),
-    };
-    const response = await dbDo(QueryCommand, allParams);
-    const items = response.Items.map((item) => clean(unmarshall(item)));
-    return { items, response, names, values, expression };
+  const get = async (data, params) => {
+    const Keys = toArray(data).map((d) => marshall(getPrimaryKey(d)));
+    if (Keys.length > 0) {
+      const RequestItems = { [db.table]: { Keys } };
+      const r = await dbDo(BatchGetItemCommand, { RequestItems, ...params });
+      return r.Responses[db.table].map((item) => clean(unmarshall(item)));
+    }
+    const props = { TableName: db.table, Key: Keys[0], ...params };
+    return [clean(unmarshall((await dbDo(GetItemCommand, props)).Item))];
   };
 
-  const update = async (data, paramFactory) =>
+  const query = async (params) => {
+    const r = await dbDo(QueryCommand, { TableName: db.table, ...params });
+    const items = r.Items.map((item) => clean(unmarshall(item)));
+    return [items, r];
+  };
+
+  const update = async (data, params) =>
     dbDo(UpdateItemCommand, {
       TableName: db.table,
-      Key: marshall(getKeys(data)),
-      ...(paramFactory && paramFactory(attributes(data))),
+      Key: marshall(getPrimaryKey(data)),
+      ...params,
     });
 
-  return { get, put, del, query, update, getKeys, attributes, marshall, dbDo };
+  return { get, put, del, query, update, getKeys, dbDo };
 };
 
-export default udb;
+export { udb, dh, dehash, attributes, beginsWith };

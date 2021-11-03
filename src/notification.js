@@ -1,5 +1,5 @@
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
-import udb from "./lib/udb.js";
+import { udb, dh, beginsWith } from "./lib/udb.js";
 
 // https://serverless.pub/migrating-to-aws-sdk-v3/
 // https://betterdev.blog/aws-javascript-sdk-v3-usage-problems-testing/
@@ -37,16 +37,16 @@ const seq = (s) => ("00000" + (parseInt(s) || 0)).slice(-6);
 const mySchema = {
   region,
   table: ddbTable,
-  indexes: [
-    ["pk", "sk"],
-    ["gsi1pk", "gsi1sk"],
-    ["gsi2pk", "gsi2sk"],
-  ],
+  indexes: {
+    primaryIndex: ["pk", "sk"],
+    gsi1: ["gsi1pk", "gsi1sk"],
+    gsi2: ["gsi2pk", "gsi2sk"],
+  },
   entities: {
     post: {
       calc: {
-        pk: ({ postType }) => `postType#${postType}`,
-        sk: ({ id }) => `seq#${seq(id)}#post#${id}#`,
+        pk: ({ postType }) => dh`postType#${postType}`,
+        sk: ({ id }) => dh`seq#${seq(id)}#post#${id}#`,
       },
       transform: ({ postType, id, tags, ...data }) => [
         { postType, id, ...data, tags },
@@ -63,8 +63,8 @@ const mySchema = {
     },
     postTag: {
       calc: {
-        pk: ({ postType, tag }) => `postType#${postType}#tag#${tag}`,
-        sk: ({ id }) => `seq#${seq(id)}#post#${id}#`,
+        pk: ({ postType, tag }) => dh`postType#${postType}#tag#${tag}`,
+        sk: ({ id }) => dh`seq#${seq(id)}#post#${id}#`,
       },
     },
   },
@@ -83,16 +83,17 @@ async function processObject(bucket, key) {
     title: content,
   };
   const written = await db.put([data]);
+  console.log({ written });
   const updated = await db.put(written);
   const fetched = await db.get(data);
-  const { items: gotAll } = await db.query(db.getKeys(data, ["pk", "sk"]));
+  const [gotAll] = await db.query(beginsWith(db.getKeys(data, ["pk", "sk"])));
   console.log({ data, written, updated, fetched, gotAll });
   const tagQuery = {
     entityType: "postTag",
     postType: "blog",
     tag: "mytag",
   };
-  const { items: gotTagged } = await db.query(db.getKeys(tagQuery, ["pk"]));
+  const [gotTagged] = await db.query(beginsWith(db.getKeys(tagQuery, ["pk"])));
 
   console.log({ gotTagged });
   const bRec = {
