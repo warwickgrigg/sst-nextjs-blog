@@ -1,5 +1,5 @@
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
-import { udb, dh, keyCondition, beginsWith } from "./lib/udb.js";
+import { udb, dh, keyCondition } from "./lib/udb.js";
 
 // https://serverless.pub/migrating-to-aws-sdk-v3/
 // https://betterdev.blog/aws-javascript-sdk-v3-usage-problems-testing/
@@ -48,8 +48,7 @@ const mySchema = {
         pk: ({ postType }) => dh`postType#${postType}`,
         sk: ({ id }) => dh`seq#${seq(id)}#post#${id}#`,
       },
-      transform: ({ postType, id, tags, ...data }) => [
-        { postType, id, ...data, tags },
+      cascade: ({ postType, id, tags }) => [
         ...(!tags
           ? []
           : tags.split(",").map((tag) => ({
@@ -86,17 +85,23 @@ async function processObject(bucket, key) {
   console.log({ written });
   const updated = await db.put(written);
   const fetched = await db.get(data);
-  const [gotAll] = await db.query(
-    keyCondition(beginsWith, db.getKeys(data, ["pk", "sk"]))
+  const [gotBegins] = await db.query(
+    keyCondition(db.getCalcs(data, ["pk", "sk"]))
   );
-  console.log({ data, written, updated, fetched, gotAll });
+  const [gotBetween] = await db.query(
+    keyCondition(
+      [db.getCalcs(data), db.getCalcs({ ...data, id: "e" }, ["sk"])],
+      ["=", "between"]
+    )
+  );
+  console.log({ data, written, updated, fetched, gotBetween, gotBegins });
   const tagQuery = {
     entityType: "postTag",
     postType: "blog",
     tag: "mytag",
   };
   const [gotTagged] = await db.query(
-    keyCondition(beginsWith, db.getKeys(tagQuery, ["pk"]))
+    keyCondition(db.getCalcs(tagQuery, ["pk"]))
   );
 
   console.log({ gotTagged });
@@ -108,9 +113,9 @@ async function processObject(bucket, key) {
   };
   const deleted = await db.del(bRec);
   console.log({ deleted });
-  //const keys = db.getKeys(bRec);
+  //const keys = db.getCalcs(bRec);
 
-  return [data, written, updated, fetched, gotAll];
+  return [data, written, updated, fetched, gotBegins];
 }
 
 export async function main(event) {
@@ -121,7 +126,7 @@ export async function main(event) {
   const [r, err] = await handle(processObject(bucket, key));
   if (err)
     throw new Error(`Cannot process ${key} from ${bucket} because ${err}`);
-  const [data, written, updated, fetched, gotAll] = r;
-  console.log({ data, written, updated, fetched, gotAll });
+  const [data, written, updated, fetched, gotBegins] = r;
+  console.log({ data, written, updated, fetched, gotBegins });
   return true;
 }

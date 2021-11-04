@@ -18,14 +18,14 @@ const schema = {
         sk: ({ username }) => username,
         // gpk1: (data) => ...
       },
-      transform: (data) => [data, { ...data, entityType: "userEmail" }],
+      cascade: (data) => [data, { ...data, entityType: "userEmail" }],
     },
     userEmail: {
       calc: {
         pk: ( { entityType }) => `${entityType}`,
         sk: ({ email }) => email,
       },
-      //transform not needed
+      //cascade not needed
     },
   },
 };
@@ -55,6 +55,7 @@ import {
     return Array.from(new Set(array1.filter(elem => set.has(elem))));
   };
 */
+const toArray = (a) => (Array.isArray(a) ? a : [a]);
 
 const dehash = (s, hash = "#", escape = "\\") =>
   s.replace(escape, escape + escape).replace(hash, escape + "d");
@@ -68,31 +69,42 @@ const dh = (strings, ...keys) => {
   return r.join("");
 };
 
-const attributes = (data) =>
-  Object.keys(data).reduce(
-    (r, k) => {
-      r.placeholders.push([`#${k}`, `:${k}`]);
-      r.names[`#${k}`] = k;
-      r.values[`:${k}`] = data[k];
-      return r;
-    },
-    { placeholders: [], names: {}, values: {} }
+const attributes = (data) => {
+  const r = { knames: {}, vnames: {}, groupings: {} };
+  toArray(data).forEach((d) =>
+    Object.keys(d).forEach((k) => {
+      const kname = `#${k}`;
+      if (!r.groupings[k]) r.groupings[k] = { kname, vnames: [] };
+      const vname = `:${k}${r.groupings[k].vnames.length}`;
+      r.groupings[k].vnames.push(vname);
+      r.knames[kname] = k;
+      r.vnames[vname] = d[k];
+    })
   );
-
-const beginsWith = (k) => (k ? ` AND begins_with(${k[0]}, ${k[1]})` : "");
-const op = (binop) => (k) => k ? ` AND ${k[0]} ${binop} ${k[1]}` : "";
-
-const keyCondition = (condition, keys) => {
-  const { names, values, placeholders } = attributes(keys);
-  const [pk, ...sk] = placeholders;
-  return {
-    KeyConditionExpression: `${pk[0]} = ${pk[1]}` + condition(...sk),
-    ExpressionAttributeNames: names,
-    ExpressionAttributeValues: marshall(values),
-  };
+  return r;
 };
 
-const toArray = (a) => (Array.isArray(a) ? a : [a]);
+const applyOp = (keyGroup, op) => {
+  const keyFunctions = {
+    beginsWith: (k, v) => `begins_with(${k}, ${v[0]})`,
+    between: (k, v) => `${k} BETWEEN ${v[0]} AND ${v[1]}`,
+  };
+  const binop = (k, o, v) => `${k} ${o} ${v[0]}`;
+
+  const { kname: kn, vnames: vn } = keyGroup;
+  if (["=", "<", ">", "<=", ">="].includes(op)) return binop(kn, op, vn);
+  if (keyFunctions[op]) return keyFunctions[op](kn, vn);
+};
+
+const keyCondition = (keys, ops = ["=", "beginsWith"]) => {
+  const { knames, vnames, groupings } = attributes(keys);
+  const exp = Object.values(groupings).map((g, i) => applyOp(g, ops[i]));
+  return {
+    KeyConditionExpression: exp.join(" AND "),
+    ExpressionAttributeNames: knames,
+    ExpressionAttributeValues: marshall(vnames),
+  };
+};
 
 const udb = (schema) => {
   const db = {
@@ -110,39 +122,39 @@ const udb = (schema) => {
     return Object.fromEntries(tuples);
   };
 
-  const getKeyTuples = (data, names) => {
+  const getCalcTuples = (data, names) => {
     const calcs = db.entities[data.entityType].calc;
     const r = [];
-    (names || Object.values(db.indexes).flat()).forEach((k) => {
+    (names || Object.keys(calcs)).forEach((k) => {
       if (k in data) r.push([k, data[k]]);
-      else if (k in calcs) r.push([k, calcs[k](data)]);
+      else if (calcs[k]) r.push([k, calcs[k](data)]);
     });
     return r;
   };
 
-  const getKeys = (...args) => Object.fromEntries(getKeyTuples(...args));
+  const getCalcs = (...args) => Object.fromEntries(getCalcTuples(...args));
 
-  const getPrimaryKey = (data) => getKeys(data, db.indexes.primaryIndex);
+  const withCalcs = (data) => ({ ...data, ...getCalcs(data) });
 
-  const withKeys = (data) => ({ ...data, ...getKeys(data) });
-
-  const stamps = (data) => {
-    const [ctd, mod] = db.timestamps;
-    return data[ctd]
-      ? { [ctd]: data[ctd], [mod]: new Date().toISOString() }
-      : { [ctd]: new Date().toISOString() };
-  };
+  const getPrimaryKey = (data) => getCalcs(data, db.indexes.primaryIndex);
 
   const toWrite = (data) => {
-    const stamped = toArray(data).map((d) => {
-      const { transform } = db.entities[d.entityType];
-      const transformed = toArray(transform ? transform(d) : d);
-      return transformed.map((item) => ({ ...item, ...stamps(d) }));
+    const r = { roots: [], dataToWrite: [] };
+    const [ctd, mod] = db.timestamps;
+    const now = new Date().toISOString();
+
+    toArray(data).forEach((d) => {
+      const stamps = d[ctd] ? { [ctd]: d[ctd], [mod]: now } : { [ctd]: now };
+      const recursiveCascade = (c) => {
+        const expanded = { ...withCalcs(c), ...stamps };
+        r.dataToWrite.push(expanded);
+        const { cascade } = db.entities[c.entityType];
+        if (cascade) cascade(expanded).forEach(recursiveCascade);
+      };
+      r.roots.push({ ...d, ...stamps });
+      recursiveCascade(d);
     });
-    return {
-      dataToWrite: stamped.flatMap((a) => a.map(withKeys)),
-      roots: stamped.map((i) => i[0]),
-    };
+    return r;
   };
 
   const doBatchWrite = async (data) => {
@@ -199,7 +211,7 @@ const udb = (schema) => {
       ...params,
     });
 
-  return { get, put, del, query, update, getKeys, dbDo };
+  return { get, put, del, query, update, getCalcs, dbDo };
 };
 
-export { udb, dh, dehash, attributes, keyCondition, beginsWith, op };
+export { udb, dh, keyCondition, dehash, attributes };
