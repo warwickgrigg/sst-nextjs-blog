@@ -122,19 +122,17 @@ const udb = (schema) => {
     return Object.fromEntries(tuples);
   };
 
-  const getCalcTuples = (data, names) => {
+  const getCalcs = (data, names) => {
     const calcs = db.entities[data.entityType].calc;
     const r = [];
     (names || Object.keys(calcs)).forEach((k) => {
       if (k in data) r.push([k, data[k]]);
       else if (calcs[k]) r.push([k, calcs[k](data)]);
     });
-    return r;
+    return Object.fromEntries(r);
   };
 
-  const getCalcs = (...args) => Object.fromEntries(getCalcTuples(...args));
-
-  const withCalcs = (data) => ({ ...data, ...getCalcs(data) });
+  const getKeys = getCalcs;
 
   const getPrimaryKey = (data) => getCalcs(data, db.indexes.primaryIndex);
 
@@ -146,7 +144,7 @@ const udb = (schema) => {
     toArray(data).forEach((d) => {
       const stamps = d[ctd] ? { [ctd]: d[ctd], [mod]: now } : { [ctd]: now };
       const recursiveCascade = (c) => {
-        const expanded = { ...withCalcs(c), ...stamps };
+        const expanded = { ...c, ...getCalcs(c), ...stamps };
         r.dataToWrite.push(expanded);
         const { cascade } = db.entities[c.entityType];
         if (cascade) cascade(expanded).forEach(recursiveCascade);
@@ -211,7 +209,7 @@ const udb = (schema) => {
       ...params,
     });
 
-  return { get, put, del, query, update, getCalcs, dbDo };
+  return { get, put, del, query, update, getKeys, getCalcs, dbDo };
 };
 
 export { udb, dh, keyCondition, dehash, attributes };

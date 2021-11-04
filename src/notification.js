@@ -39,8 +39,8 @@ const mySchema = {
   table: ddbTable,
   indexes: {
     primaryIndex: ["pk", "sk"],
-    gsi1: ["gsi1pk", "gsi1sk"],
-    gsi2: ["gsi2pk", "gsi2sk"],
+    // gsi1: ["gsi1pk", "gsi1sk"],
+    // gsi2: ["gsi2pk", "gsi2sk"],
   },
   entities: {
     post: {
