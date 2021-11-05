@@ -1,5 +1,5 @@
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
-import { udb, dh, keyCondition } from "./lib/udb.js";
+import { udb, dh, dc } from "./lib/udb.js";
 
 // https://serverless.pub/migrating-to-aws-sdk-v3/
 // https://betterdev.blog/aws-javascript-sdk-v3-usage-problems-testing/
@@ -67,10 +67,18 @@ const mySchema = {
       },
     },
   },
-  queries: {},
+  queries: {
+    all: ({ pk }) => dc("KeyCondition")`#pk = ${pk}`,
+    beginsWith: ({ pk, sk }) =>
+      dc("KeyCondition")`#pk = ${pk} AND begins_with(#sk, ${sk})`,
+    between: ([{ pk, sk }, e]) =>
+      dc("KeyCondition")`#pk = ${pk} AND #sk BETWEEN ${sk} AND ${e.sk}`,
+  },
 };
 
 const db = udb(mySchema);
+const q = db.queries;
+console.log("udb prepped", q);
 
 async function processObject(bucket, key) {
   const content = await getObject(bucket, key);
@@ -85,24 +93,27 @@ async function processObject(bucket, key) {
   console.log({ written });
   const updated = await db.put(written);
   const fetched = await db.get(data);
-  const [gotBegins] = await db.query(
-    keyCondition(db.getCalcs(data, ["pk", "sk"]))
-  );
+  const [gotBegins] = await q.beginsWith(data);
+  console.log({ gotBegins });
+
+  const [gotBetween] = await q.between([data, { ...data, id: "e" }]);
+
+  /*
   const [gotBetween] = await db.query(
     keyCondition(
       [db.getCalcs(data), db.getCalcs({ ...data, id: "e" }, ["sk"])],
       ["=", "between"]
     )
   );
+  */
+
   console.log({ data, written, updated, fetched, gotBetween, gotBegins });
   const tagQuery = {
     entityType: "postTag",
     postType: "blog",
     tag: "mytag",
   };
-  const [gotTagged] = await db.query(
-    keyCondition(db.getCalcs(tagQuery, ["pk"]))
-  );
+  const [gotTagged] = await q.all(tagQuery);
 
   console.log({ gotTagged });
   const bRec = {

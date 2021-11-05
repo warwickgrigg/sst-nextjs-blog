@@ -58,7 +58,9 @@ import {
 const toArray = (a) => (Array.isArray(a) ? a : [a]);
 
 const dehash = (s, hash = "#", escape = "\\") =>
-  s.replace(escape, escape + escape).replace(hash, escape + "d");
+  !s ? s : s.replace(escape, escape + escape).replace(hash, escape + "d");
+
+// Tagged template functions
 
 const dh = (strings, ...keys) => {
   const r = [];
@@ -69,42 +71,32 @@ const dh = (strings, ...keys) => {
   return r.join("");
 };
 
-const attributes = (data) => {
-  const r = { knames: {}, vnames: {}, groupings: {} };
-  toArray(data).forEach((d) =>
-    Object.keys(d).forEach((k) => {
-      const kname = `#${k}`;
-      if (!r.groupings[k]) r.groupings[k] = { kname, vnames: [] };
-      const vname = `:${k}${r.groupings[k].vnames.length}`;
-      r.groupings[k].vnames.push(vname);
-      r.knames[kname] = k;
-      r.vnames[vname] = d[k];
-    })
-  );
-  return r;
-};
-
-const applyOp = (keyGroup, op) => {
-  const keyFunctions = {
-    beginsWith: (k, v) => `begins_with(${k}, ${v[0]})`,
-    between: (k, v) => `${k} BETWEEN ${v[0]} AND ${v[1]}`,
+const dc =
+  (prefix) =>
+  (strings, ...values) => {
+    const r = { values: {}, names: {}, expressionParts: [] };
+    const valueUsedCount = {};
+    let name = "v";
+    for (let i = 0; i < strings.length; i += 1) {
+      r.expressionParts.push(strings[i]);
+      const names = strings[i].match(/#[A-Za-z]\w+/g) || [];
+      names.forEach((k) => {
+        name = k.slice(1);
+        r.names[k] = name;
+      });
+      if (i < values.length) {
+        valueUsedCount[name] = (valueUsedCount[name] || 0) + 1;
+        const valueName = `:${name}${valueUsedCount[name]}`;
+        r.expressionParts.push(valueName);
+        r.values[valueName] = values[i];
+      }
+    }
+    return {
+      [`${prefix}Expression`]: r.expressionParts.join(""),
+      ExpressionAttributeNames: r.names,
+      ExpressionAttributeValues: marshall(r.values),
+    };
   };
-  const binop = (k, o, v) => `${k} ${o} ${v[0]}`;
-
-  const { kname: kn, vnames: vn } = keyGroup;
-  if (["=", "<", ">", "<=", ">="].includes(op)) return binop(kn, op, vn);
-  if (keyFunctions[op]) return keyFunctions[op](kn, vn);
-};
-
-const keyCondition = (keys, ops = ["=", "beginsWith"]) => {
-  const { knames, vnames, groupings } = attributes(keys);
-  const exp = Object.values(groupings).map((g, i) => applyOp(g, ops[i]));
-  return {
-    KeyConditionExpression: exp.join(" AND "),
-    ExpressionAttributeNames: knames,
-    ExpressionAttributeValues: marshall(vnames),
-  };
-};
 
 const udb = (schema) => {
   const db = {
@@ -123,13 +115,13 @@ const udb = (schema) => {
   };
 
   const getCalcs = (data, names) => {
-    const calcs = db.entities[data.entityType].calc;
-    const r = [];
-    (names || Object.keys(calcs)).forEach((k) => {
-      if (k in data) r.push([k, data[k]]);
-      else if (calcs[k]) r.push([k, calcs[k](data)]);
-    });
-    return Object.fromEntries(r);
+    const { calc } = db.entities[data.entityType];
+    const r = {};
+    for (const k of names || Object.keys(calc)) {
+      console.log({ k });
+      r[k] = k in data ? data[k] : calc[k](data);
+    }
+    return r;
   };
 
   const getKeys = getCalcs;
@@ -144,7 +136,9 @@ const udb = (schema) => {
     toArray(data).forEach((d) => {
       const stamps = d[ctd] ? { [ctd]: d[ctd], [mod]: now } : { [ctd]: now };
       const recursiveCascade = (c) => {
+        console.log({ r, c, stamps });
         const expanded = { ...c, ...getCalcs(c), ...stamps };
+        console.log({ expanded });
         r.dataToWrite.push(expanded);
         const { cascade } = db.entities[c.entityType];
         if (cascade) cascade(expanded).forEach(recursiveCascade);
@@ -152,6 +146,7 @@ const udb = (schema) => {
       r.roots.push({ ...d, ...stamps });
       recursiveCascade(d);
     });
+
     return r;
   };
 
@@ -202,6 +197,24 @@ const udb = (schema) => {
     return [items, r];
   };
 
+  const queries = Object.fromEntries(
+    Object.entries(schema.queries).map(([k, q]) => [
+      k,
+      async (data) => {
+        {
+          console.log({ data });
+          const params = q(
+            Array.isArray(data)
+              ? data.map((d) => ({ ...d, ...getCalcs(d) }))
+              : { ...data, ...getCalcs(data) }
+          );
+          console.log({ params });
+          return query(params);
+        }
+      },
+    ])
+  );
+
   const update = async (data, params) =>
     dbDo(UpdateItemCommand, {
       TableName: db.table,
@@ -209,7 +222,46 @@ const udb = (schema) => {
       ...params,
     });
 
-  return { get, put, del, query, update, getKeys, getCalcs, dbDo };
+  return { get, put, del, query, update, getKeys, getCalcs, queries, dbDo };
 };
 
-export { udb, dh, keyCondition, dehash, attributes };
+export { udb, dh, dc, dehash };
+
+/*
+const attributes = (data) => {
+  const r = { knames: {}, vnames: {}, groupings: {} };
+  toArray(data).forEach((d) =>
+    Object.keys(d).forEach((k) => {
+      const kname = `#${k}`;
+      if (!r.groupings[k]) r.groupings[k] = { kname, vnames: [] };
+      const vname = `:${k}${r.groupings[k].vnames.length}`;
+      r.groupings[k].vnames.push(vname);
+      r.knames[kname] = k;
+      r.vnames[vname] = d[k];
+    })
+  );
+  return r;
+};
+
+const applyOp = (keyGroup, op) => {
+  const keyFunctions = {
+    beginsWith: (k, v) => `begins_with(${k}, ${v[0]})`,
+    between: (k, v) => `${k} BETWEEN ${v[0]} AND ${v[1]}`,
+  };
+  const binop = (k, o, v) => `${k} ${o} ${v[0]}`;
+
+  const { kname: kn, vnames: vn } = keyGroup;
+  if (["=", "<", ">", "<=", ">="].includes(op)) return binop(kn, op, vn);
+  if (keyFunctions[op]) return keyFunctions[op](kn, vn);
+};
+
+const keyCondition = (keys, ops = ["=", "beginsWith"]) => {
+  const { knames, vnames, groupings } = attributes(keys);
+  const exp = Object.values(groupings).map((g, i) => applyOp(g, ops[i]));
+  return {
+    KeyConditionExpression: exp.join(" AND "),
+    ExpressionAttributeNames: knames,
+    ExpressionAttributeValues: marshall(vnames),
+  };
+};
+*/
