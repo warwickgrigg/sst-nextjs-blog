@@ -34,6 +34,7 @@ const handle = (promise) =>
 
 const seq = (s) => ("00000" + (parseInt(s) || 0)).slice(-6);
 
+const dcKey = dc("KeyCondition");
 const mySchema = {
   region,
   table: ddbTable,
@@ -73,6 +74,10 @@ const mySchema = {
       dc("KeyCondition")`#pk = ${pk} AND begins_with(#sk, ${sk})`,
     between: ([{ pk, sk }, e]) =>
       dc("KeyCondition")`#pk = ${pk} AND #sk BETWEEN ${sk} AND ${e.sk}`,
+    gsiBetween: ([{ gsi1pk, gsi1sk }, e]) => ({
+      ...dcKey`#gsi1pk = ${gsi1pk} AND #sk BETWEEN ${gsi1sk} AND ${e.gsi1sk}`,
+      IndexName: "gsi1",
+    }),
   },
 };
 
@@ -98,15 +103,6 @@ async function processObject(bucket, key) {
 
   const [gotBetween] = await q.between([data, { ...data, id: "e" }]);
 
-  /*
-  const [gotBetween] = await db.query(
-    keyCondition(
-      [db.getCalcs(data), db.getCalcs({ ...data, id: "e" }, ["sk"])],
-      ["=", "between"]
-    )
-  );
-  */
-
   console.log({ data, written, updated, fetched, gotBetween, gotBegins });
   const tagQuery = {
     entityType: "postTag",
@@ -124,7 +120,6 @@ async function processObject(bucket, key) {
   };
   const deleted = await db.del(bRec);
   console.log({ deleted });
-  //const keys = db.getCalcs(bRec);
 
   return [data, written, updated, fetched, gotBegins];
 }

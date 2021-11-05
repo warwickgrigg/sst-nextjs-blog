@@ -57,6 +57,8 @@ import {
 */
 const toArray = (a) => (Array.isArray(a) ? a : [a]);
 
+const maybeMap = (f) => (d) => Array.isArray(d) ? d.map(f) : f(d);
+
 const dehash = (s, hash = "#", escape = "\\") =>
   !s ? s : s.replace(escape, escape + escape).replace(hash, escape + "d");
 
@@ -117,14 +119,10 @@ const udb = (schema) => {
   const getCalcs = (data, names) => {
     const { calc } = db.entities[data.entityType];
     const r = {};
-    for (const k of names || Object.keys(calc)) {
-      console.log({ k });
+    for (const k of names || Object.keys(calc))
       r[k] = k in data ? data[k] : calc[k](data);
-    }
     return r;
   };
-
-  const getKeys = getCalcs;
 
   const getPrimaryKey = (data) => getCalcs(data, db.indexes.primaryIndex);
 
@@ -136,9 +134,7 @@ const udb = (schema) => {
     toArray(data).forEach((d) => {
       const stamps = d[ctd] ? { [ctd]: d[ctd], [mod]: now } : { [ctd]: now };
       const recursiveCascade = (c) => {
-        console.log({ r, c, stamps });
         const expanded = { ...c, ...getCalcs(c), ...stamps };
-        console.log({ expanded });
         r.dataToWrite.push(expanded);
         const { cascade } = db.entities[c.entityType];
         if (cascade) cascade(expanded).forEach(recursiveCascade);
@@ -200,18 +196,7 @@ const udb = (schema) => {
   const queries = Object.fromEntries(
     Object.entries(schema.queries).map(([k, q]) => [
       k,
-      async (data) => {
-        {
-          console.log({ data });
-          const params = q(
-            Array.isArray(data)
-              ? data.map((d) => ({ ...d, ...getCalcs(d) }))
-              : { ...data, ...getCalcs(data) }
-          );
-          console.log({ params });
-          return query(params);
-        }
-      },
+      (data) => query(q(maybeMap((d) => ({ ...d, ...getCalcs(d) }))(data))),
     ])
   );
 
@@ -222,7 +207,7 @@ const udb = (schema) => {
       ...params,
     });
 
-  return { get, put, del, query, update, getKeys, getCalcs, queries, dbDo };
+  return { get, put, del, query, update, getCalcs, queries, dbDo };
 };
 
 export { udb, dh, dc, dehash };
