@@ -44,10 +44,9 @@ import {
   BatchWriteItemCommand,
   BatchGetItemCommand,
   QueryCommand,
+  ScanCommand,
   UpdateItemCommand,
 } from "@aws-sdk/client-dynamodb";
-
-// const pick = (obj, keys) => Object.fromEntries(keys.map((k) => [k, obj[k]]));
 
 /*
   const intersection(array1, array2) =>  {
@@ -55,16 +54,17 @@ import {
     return Array.from(new Set(array1.filter(elem => set.has(elem))));
   };
 */
+// const pick = (o) => (keys) => Object.fromEntries(keys.map((k) => [k, o[k]]));
+const mapObj = (o) => (f) =>
+  Object.fromEntries(Object.entries(o).map(([k, v]) => [k, f(v)]));
 const toArray = (a) => (Array.isArray(a) ? a : [a]);
-
 const maybeMap = (f) => (d) => Array.isArray(d) ? d.map(f) : f(d);
-
 const dehash = (s, hash = "#", escape = "\\") =>
   !s ? s : s.replace(escape, escape + escape).replace(hash, escape + "d");
 
 // Tagged template functions
 
-const dh = (strings, ...keys) => {
+const sKey = (strings, ...keys) => {
   const r = [];
   for (let i = 0; i < strings.length; i += 1) {
     r.push(strings[i]);
@@ -73,7 +73,7 @@ const dh = (strings, ...keys) => {
   return r.join("");
 };
 
-const dc =
+const dExp =
   (prefix) =>
   (strings, ...values) => {
     const r = { values: {}, names: {}, expressionParts: [] };
@@ -99,6 +99,9 @@ const dc =
       ExpressionAttributeValues: marshall(r.values),
     };
   };
+
+const keyExp = dExp("KeyCondition");
+const filterExp = dExp("Filter");
 
 const udb = (schema) => {
   const db = {
@@ -187,17 +190,17 @@ const udb = (schema) => {
     return [clean(unmarshall((await dbDo(GetItemCommand, props)).Item))];
   };
 
-  const query = async (params) => {
-    const r = await dbDo(QueryCommand, { TableName: db.table, ...params });
+  const queryOrScan = async (command, params) => {
+    const r = await dbDo(command, { TableName: db.table, ...params });
     const items = r.Items.map((item) => clean(unmarshall(item)));
     return [items, r];
   };
 
-  const queries = Object.fromEntries(
-    Object.entries(schema.queries).map(([k, q]) => [
-      k,
-      (data) => query(q(maybeMap((d) => ({ ...d, ...getCalcs(d) }))(data))),
-    ])
+  const query = (...params) => queryOrScan(QueryCommand, ...params);
+  const scan = (...params) => queryOrScan(ScanCommand, ...params);
+
+  const queries = mapObj(schema.keyConditions)(
+    (f) => (data) => query(f(maybeMap((d) => ({ ...d, ...getCalcs(d) }))(data)))
   );
 
   const update = async (data, params) =>
@@ -207,10 +210,10 @@ const udb = (schema) => {
       ...params,
     });
 
-  return { get, put, del, query, update, getCalcs, queries, dbDo };
+  return { get, put, del, query, scan, update, getCalcs, queries, dbDo };
 };
 
-export { udb, dh, dc, dehash };
+export { udb, sKey, keyExp, filterExp, dExp, dehash };
 
 /*
 const attributes = (data) => {

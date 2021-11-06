@@ -1,5 +1,5 @@
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
-import { udb, dh, dc } from "./lib/udb.js";
+import { udb, sKey, keyExp } from "./lib/udb.js";
 
 // https://serverless.pub/migrating-to-aws-sdk-v3/
 // https://betterdev.blog/aws-javascript-sdk-v3-usage-problems-testing/
@@ -34,21 +34,24 @@ const handle = (promise) =>
 
 const seq = (s) => ("00000" + (parseInt(s) || 0)).slice(-6);
 
-const dcKey = dc("KeyCondition");
 const mySchema = {
   region,
   table: ddbTable,
   indexes: {
     primaryIndex: ["pk", "sk"],
+    // also, optionally, secondary indexes
     // gsi1: ["gsi1pk", "gsi1sk"],
     // gsi2: ["gsi2pk", "gsi2sk"],
   },
   entities: {
+    // Keyed by entityType, a manadatory attribute in every item
+    // Use sKey`string` for safe key interpolation: "#" > "\h", "\" > \\
     post: {
       calc: {
-        pk: ({ postType }) => dh`postType#${postType}`,
-        sk: ({ id }) => dh`seq#${seq(id)}#post#${id}#`,
+        pk: ({ postType }) => sKey`postType#${postType}`,
+        sk: ({ id }) => sKey`seq#${seq(id)}#post#${id}#`,
       },
+      // Cascade function denormalise items
       cascade: ({ postType, id, tags }) => [
         ...(!tags
           ? []
@@ -63,26 +66,33 @@ const mySchema = {
     },
     postTag: {
       calc: {
-        pk: ({ postType, tag }) => dh`postType#${postType}#tag#${tag}`,
-        sk: ({ id }) => dh`seq#${seq(id)}#post#${id}#`,
+        pk: ({ postType, tag }) => sKey`postType#${postType}#tag#${tag}`,
+        sk: ({ id }) => sKey`seq#${seq(id)}#post#${id}#`,
       },
     },
   },
-  queries: {
-    all: ({ pk }) => dc("KeyCondition")`#pk = ${pk}`,
-    beginsWith: ({ pk, sk }) =>
-      dc("KeyCondition")`#pk = ${pk} AND begins_with(#sk, ${sk})`,
-    between: ([{ pk, sk }, e]) =>
-      dc("KeyCondition")`#pk = ${pk} AND #sk BETWEEN ${sk} AND ${e.sk}`,
-    gsiBetween: ([{ gsi1pk, gsi1sk }, e]) => ({
-      ...dcKey`#gsi1pk = ${gsi1pk} AND #sk BETWEEN ${gsi1sk} AND ${e.gsi1sk}`,
+  keyConditions: {
+    // The key condition expressions used in queries returned in udb(schema).queries
+    all: (data) => keyExp`#pk = ${data.pk}`,
+    beginsWith: ({ pk, sk }) => keyExp`#pk = ${pk} AND begins_with(#sk, ${sk})`,
+    between: ([{ pk, sk }, hi]) =>
+      keyExp`#pk = ${pk} AND #sk BETWEEN ${sk} AND ${hi.sk}`,
+    gsiBetween: ([{ gsi1pk, gsi1sk }, hi]) => ({
+      ...keyExp`#gsi1pk = ${gsi1pk} AND #sk BETWEEN ${gsi1sk} AND ${hi.gsi1sk}`,
       IndexName: "gsi1",
     }),
+  },
+  scanConditions: {
+    // The scan condition expressions used in scans returned in udb(schema).scans
+  },
+  filters: {
+    // Filter expressions returned unchanged in udb(schema).filters
   },
 };
 
 const db = udb(mySchema);
 const q = db.queries;
+
 console.log("udb prepped", q);
 
 async function processObject(bucket, key) {
