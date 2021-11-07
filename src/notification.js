@@ -44,14 +44,15 @@ const mySchema = {
     // gsi2: ["gsi2pk", "gsi2sk"],
   },
   entities: {
-    // Keyed by entityType, a manadatory attribute in every item
+    // Keyed by entityType, a mandatory attribute in every item
     // Use sKey`string` for safe key interpolation: "#" > "\h", "\" > \\
     post: {
       calc: {
+        // Calculate item attributes, eg keys, ttl etc
         pk: ({ postType }) => sKey`postType#${postType}`,
         sk: ({ id }) => sKey`seq#${seq(id)}#post#${id}#`,
       },
-      // Cascade function denormalise items
+      // Denormalise the item via cascade function
       cascade: ({ postType, id, tags }) => [
         ...(!tags
           ? []

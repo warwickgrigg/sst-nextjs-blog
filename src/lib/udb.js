@@ -54,9 +54,13 @@ import {
     return Array.from(new Set(array1.filter(elem => set.has(elem))));
   };
 */
-// const pick = (o) => (keys) => Object.fromEntries(keys.map((k) => [k, o[k]]));
 const mapObj = (o) => (f) =>
   Object.fromEntries(Object.entries(o).map(([k, v]) => [k, f(v)]));
+// const filterObj = (o) => (f) => Object.fromEntries(Object.entries(o).filter(f));
+function pick(o) {
+  return (keys) => Object.fromEntries(keys.map((k) => [k, o[k]]));
+}
+
 const toArray = (a) => (Array.isArray(a) ? a : [a]);
 const maybeMap = (f) => (d) => Array.isArray(d) ? d.map(f) : f(d);
 const dehash = (s, hash = "#", escape = "\\") =>
@@ -112,7 +116,7 @@ const udb = (schema) => {
   const ddbClient = new DynamoDBClient(db.region);
   const dbDo = (Command, ...params) => ddbClient.send(new Command(...params));
 
-  const clean = (data) => {
+  const deCalc = (data) => {
     const { calc } = db.entities[data.entityType];
     if (!calc) return data;
     const tuples = Object.entries(data).filter(([k]) => !calc[k]);
@@ -184,22 +188,22 @@ const udb = (schema) => {
     if (Keys.length > 0) {
       const RequestItems = { [db.table]: { Keys } };
       const r = await dbDo(BatchGetItemCommand, { RequestItems, ...params });
-      return r.Responses[db.table].map((item) => clean(unmarshall(item)));
+      return r.Responses[db.table].map((item) => deCalc(unmarshall(item)));
     }
     const props = { TableName: db.table, Key: Keys[0], ...params };
-    return [clean(unmarshall((await dbDo(GetItemCommand, props)).Item))];
+    return [deCalc(unmarshall((await dbDo(GetItemCommand, props)).Item))];
   };
 
   const queryOrScan = async (command, params) => {
     const r = await dbDo(command, { TableName: db.table, ...params });
-    const items = r.Items.map((item) => clean(unmarshall(item)));
+    const items = r.Items.map((item) => deCalc(unmarshall(item)));
     return [items, r];
   };
 
   const query = (...params) => queryOrScan(QueryCommand, ...params);
   const scan = (...params) => queryOrScan(ScanCommand, ...params);
 
-  const queries = mapObj(schema.keyConditions)(
+  const queries = mapObj(pick("keyConditions")(schema))(
     (f) => (data) => query(f(maybeMap((d) => ({ ...d, ...getCalcs(d) }))(data)))
   );
 
