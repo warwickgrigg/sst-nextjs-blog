@@ -4,9 +4,7 @@ import { udb, sKey, keyExp } from "./lib/udb.js";
 // https://serverless.pub/migrating-to-aws-sdk-v3/
 // https://betterdev.blog/aws-javascript-sdk-v3-usage-problems-testing/
 
-// const region = "us-east-1"
 const region = process.env.REGION;
-// const ddbTable = "testa-nextjs-blog-Blog";
 const ddbTable = process.env.TABLE_NAME;
 
 const s3 = new S3Client({ region });
@@ -73,7 +71,7 @@ const mySchema = {
     },
   },
   queries: {
-    // The key condition expressions used in queries returned in udb(schema).queries
+    // Key condition expressions generate queries in udb(schema).queries
     all: (data) => keyExp`#pk = ${data.pk}`,
     beginsWith: ({ pk, sk }) => keyExp`#pk = ${pk} AND begins_with(#sk, ${sk})`,
     between: ([{ pk, sk }, hi]) =>
@@ -96,18 +94,80 @@ const q = db.queries;
 
 console.log("udb prepped", q);
 
-async function processObject(bucket, key) {
-  const content = await getObject(bucket, key);
-  const data = {
-    entityType: "post",
-    postType: "blog",
-    id: key,
-    tags: "mytag, othertag",
-    title: content,
+const fromMarkdown = (markdown) => {
+  const unFlatObj = (obj) => {
+    const result = {};
+    Object.entries(obj).forEach(([keyPath, v]) => {
+      const keys = keyPath.split(".");
+      let r = result;
+      keys.slice(0, -1).forEach((k) => {
+        if (typeof r[k] !== "object") r[k] = {};
+        r = r[k];
+      });
+      const key = keys[keys.length - 1];
+      if (key.slice(-4) === "List")
+        r[key.slice(0, -4)] = v.split(",").map((s) => s.trim());
+      else r[key] = v;
+    });
+    return result;
   };
+  const front = markdown.match(/---\n([\s\S]*?)\n---\n/m);
+  if (!front) return { content: markdown };
+  const vars = front[1].split("\n");
+  const props = {};
+  // eslint-disable-next-line no-plusplus
+  for (let i = 0; i < vars.length; i++) {
+    const [, key] = vars[i].match(/^(\S*?):/) || [];
+    if (!key) return null; // invalid font matter
+    const [, v] = vars[i].match(/:\s*(.*)$/) || [undefined, ""];
+    props[key] = v;
+  }
+  return {
+    ...unFlatObj(props),
+    content: markdown.slice(front[0].length),
+  };
+};
+
+async function processObject(bucket, key) {
+  const entityType = "post";
+  const content = await getObject(bucket, key);
+  const [postType, objectName] = key.split("/").slice(-2);
+  const id = objectName.split(".")[0];
+  const info = key.slice(-3) === ".md" ? fromMarkdown(content) : {};
+  const inferredTitle = objectName.slice(0, -3).replace(/-/g, " ");
+  const { title = inferredTitle, heading = inferredTitle, tags } = info;
+
+  const data = {
+    entityType,
+    postType,
+    id,
+    objectName: key,
+    tags: tags.join(","),
+    heading,
+    title,
+  };
+  console.log({ data });
   const written = await db.put([data]);
   console.log({ written });
-  const updated = await db.put(written);
+
+  return [data, written];
+}
+
+export async function main(event) {
+  const s3Record = event.Records[0].s3;
+  // Grab the filename and bucket name
+  const key = s3Record.object.key;
+  const bucket = s3Record.bucket.name;
+  const [r, err] = await handle(processObject(bucket, key));
+  if (err)
+    throw new Error(`Cannot process ${key} from ${bucket} because ${err}`);
+  const [data, written, updated, fetched, gotBegins] = r;
+  console.log({ data, written, updated, fetched, gotBegins });
+  return true;
+}
+
+/*
+const updated = await db.put(written);
   const fetched = await db.get(data);
   const [gotBegins] = await q.beginsWith(data);
   console.log({ gotBegins });
@@ -132,18 +192,4 @@ async function processObject(bucket, key) {
   const deleted = await db.del(bRec);
   console.log({ deleted });
 
-  return [data, written, updated, fetched, gotBegins];
-}
-
-export async function main(event) {
-  const s3Record = event.Records[0].s3;
-  // Grab the filename and bucket name
-  const key = s3Record.object.key;
-  const bucket = s3Record.bucket.name;
-  const [r, err] = await handle(processObject(bucket, key));
-  if (err)
-    throw new Error(`Cannot process ${key} from ${bucket} because ${err}`);
-  const [data, written, updated, fetched, gotBegins] = r;
-  console.log({ data, written, updated, fetched, gotBegins });
-  return true;
-}
+*/
