@@ -54,13 +54,11 @@ import {
     return Array.from(new Set(array1.filter(elem => set.has(elem))));
   };
 */
+
+//const pick = (keys) => (o) => Object.fromEntries(keys.map((k) => [k, o[k]]));
+
 const mapObj = (o) => (f) =>
   Object.fromEntries(Object.entries(o).map(([k, v]) => [k, f(v)]));
-// const filterObj = (o) => (f) => Object.fromEntries(Object.entries(o).filter(f));
-function pick(o) {
-  return (keys) => Object.fromEntries(keys.map((k) => [k, o[k]]));
-}
-
 const toArray = (a) => (Array.isArray(a) ? a : [a]);
 const maybeMap = (f) => (d) => Array.isArray(d) ? d.map(f) : f(d);
 const dehash = (s, hash = "#", escape = "\\") =>
@@ -203,9 +201,15 @@ const udb = (schema) => {
   const query = (...params) => queryOrScan(QueryCommand, ...params);
   const scan = (...params) => queryOrScan(ScanCommand, ...params);
 
-  const queries = mapObj(pick("keyConditions")(schema))(
-    (f) => (data) => query(f(maybeMap((d) => ({ ...d, ...getCalcs(d) }))(data)))
-  );
+  const withCalcs = (data) => maybeMap((d) => ({ ...d, ...getCalcs(d) }))(data);
+
+  const makeQueriesWithCalcs = ([command, condFns]) =>
+    mapObj(condFns)((f) => (data) => queryOrScan(command, f(withCalcs(data))));
+
+  const [queries, scans] = [
+    [QueryCommand, schema.queries],
+    [ScanCommand, schema.scans],
+  ].map(makeQueriesWithCalcs);
 
   const update = async (data, params) =>
     dbDo(UpdateItemCommand, {
@@ -214,7 +218,7 @@ const udb = (schema) => {
       ...params,
     });
 
-  return { get, put, del, query, scan, update, getCalcs, queries, dbDo };
+  return { get, put, del, query, scan, update, getCalcs, queries, scans, dbDo };
 };
 
 export { udb, sKey, keyExp, filterExp, dExp, dehash };

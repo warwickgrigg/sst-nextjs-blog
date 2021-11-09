@@ -72,7 +72,7 @@ const mySchema = {
       },
     },
   },
-  keyConditions: {
+  queries: {
     // The key condition expressions used in queries returned in udb(schema).queries
     all: (data) => keyExp`#pk = ${data.pk}`,
     beginsWith: ({ pk, sk }) => keyExp`#pk = ${pk} AND begins_with(#sk, ${sk})`,
@@ -83,7 +83,7 @@ const mySchema = {
       IndexName: "gsi1",
     }),
   },
-  scanConditions: {
+  scans: {
     // The scan condition expressions used in scans returned in udb(schema).scans
   },
   filters: {
