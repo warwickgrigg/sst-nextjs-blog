@@ -57,8 +57,12 @@ import {
 
 //const pick = (keys) => (o) => Object.fromEntries(keys.map((k) => [k, o[k]]));
 
+const mapObj = (f) => (o) =>
+  Object.fromEntries(Object.entries(o).map(([k, v]) => [k, f(v)]));
+/*
 const mapObj = (o) => (f) =>
   Object.fromEntries(Object.entries(o).map(([k, v]) => [k, f(v)]));
+  */
 const toArray = (a) => (Array.isArray(a) ? a : [a]);
 const maybeMap = (f) => (d) => Array.isArray(d) ? d.map(f) : f(d);
 const dehash = (s, hash = "#", escape = "\\") =>
@@ -157,7 +161,7 @@ const udb = (schema) => {
       return dbDo(BatchWriteItemCommand, {
         RequestItems: { [TableName]: data },
       });
-    const [request, props] = Object.entries(data[0]);
+    const [request, props] = Object.entries(data[0])[0];
     const params = { TableName: db.table, ...props };
     if (request === "PutRequest") return dbDo(PutItemCommand, params);
     return dbDo(DeleteItemCommand, params);
@@ -203,6 +207,7 @@ const udb = (schema) => {
 
   const withCalcs = (data) => maybeMap((d) => ({ ...d, ...getCalcs(d) }))(data);
 
+  /*
   const makeQueriesWithCalcs = ([command, condFns]) =>
     mapObj(condFns)((f) => (data) => queryOrScan(command, f(withCalcs(data))));
 
@@ -210,6 +215,12 @@ const udb = (schema) => {
     [QueryCommand, schema.queries],
     [ScanCommand, schema.scans],
   ].map(makeQueriesWithCalcs);
+  */
+  const makeQueriesWithCalcs = mapObj((f) => (data) => f(withCalcs(data)));
+
+  const [queries, scans] = [schema.queries, schema.scans].map(
+    makeQueriesWithCalcs
+  );
 
   const update = async (data, params) =>
     dbDo(UpdateItemCommand, {

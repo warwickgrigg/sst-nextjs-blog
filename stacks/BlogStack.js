@@ -6,7 +6,7 @@ import {
   NextjsSite,
 } from "@serverless-stack/resources";
 import { EventType } from "@aws-cdk/aws-s3";
-import s3deploy from "@aws-cdk/aws-s3-deployment";
+// import s3deploy from "@aws-cdk/aws-s3-deployment";
 import ssm from "@aws-cdk/aws-ssm";
 import { ProjectionType } from "@aws-cdk/aws-dynamodb";
 import { RemovalPolicy } from "@aws-cdk/core";
@@ -64,11 +64,13 @@ export default class MyStack extends Stack {
 
     contentBucket.attachPermissions([table, contentBucket]);
 
+    /*
     new s3deploy.BucketDeployment(this, "DeployContentPostBucket", {
       sources: [s3deploy.Source.asset("./content/bucket/blog")],
       destinationBucket: contentBucket.s3Bucket,
       destinationKeyPrefix: "blog", // optional prefix in destination bucket
     });
+    */
 
     environment.BUCKET_NAME = contentBucket.bucketName;
 

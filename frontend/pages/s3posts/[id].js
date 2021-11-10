@@ -1,3 +1,69 @@
+import Markdown from "markdown-to-jsx";
+import db from "../slib/db.js";
+import fromMarkdown from "../slib/fromMarkdown.js";
+import getObject from "../slib/getObject.js";
+
+const bucketName =
+  process.env.BUCKET_NAME_FOR_LOCALHOST || process.env.BUCKET_NAME;
+const testVar = process.env.TEST_VAR;
+
+const entityType = "post";
+const postType = "blog";
+
+const q = db.queries;
+console.log("udb prepped", q);
+
+const getPost = async (id) => {
+  if (!bucketName || bucketName.slice(0, 3) === "{{ ") return; // fail safe
+  const key = `${prefix}${id}`;
+  console.log({ key });
+  const r = await s3.send(new GetObjectCommand({ ...bucketParams, Key: key }));
+  return streamToString(r.Body);
+};
+
+const getPostKeys = async () => q.all;
+
+export async function getStaticPaths() {
+  const staticKeys = (await getPostKeys()).slice(0, 1); // just one
+  console.log({ staticKeys });
+  const paths = staticKeys.map((id) => ({ params: { id } }));
+  return { paths, fallback: "blocking" };
+}
+
+export async function getStaticProps({ params }) {
+  const post = await getPost(params.id);
+  console.log({ bucketName, testVar, post });
+  return post ? { props: { post } } : { notFound: true };
+}
+
+// eslint-disable-next-line no-unused-vars
+const Post = ({ heading, createdDate, writtenBy, img, content }) => (
+  <>
+    <h1> {heading} </h1>
+
+    <div className="flex justified">
+      <p>{createdDate}</p>
+      {!!writtenBy && <p>by {writtenBy}</p>}
+    </div>
+    {/* !!img && (
+      <Picture
+        src={`${staticAssetServerUrl}${assetPath}blog/${img.id}.jpg`}
+        alt={img.alt}
+      />
+    ) */}
+    <br />
+    {/* eslint-disable-next-line react/no-children-prop */}
+    <Markdown children={content} />
+  </>
+);
+
+export default Post;
+
+/*
+
+// const prefix = "blog/";
+// const listParams = { ...bucketParams, Prefix: prefix };
+
 const {
   S3Client,
   ListObjectsV2Command,
@@ -5,13 +71,11 @@ const {
 } = require("@aws-sdk/client-s3");
 
 const region = process.env.REGION;
-// const region = "us-east-1";
-const bucketName =
-  process.env.BUCKET_NAME_FOR_LOCALHOST || process.env.BUCKET_NAME;
-const testVar = process.env.TEST_VAR;
+
 const bucketParams = { Bucket: bucketName };
 const prefix = "blog/";
 const listParams = { ...bucketParams, Prefix: prefix };
+
 
 const s3 = new S3Client({ region });
 
@@ -58,3 +122,4 @@ export async function getStaticProps({ params }) {
 export default function Post({ post }) {
   return <h1>{post}</h1>;
 }
+*/
