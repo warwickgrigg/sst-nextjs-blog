@@ -44,8 +44,8 @@ const mySchema = {
       },
     },
   },
-  queries: {
-    // Key condition expressions generate queries in udb(schema).queries
+  conditions: {
+    // returned in udb(schema).conditions enriched with calc attributes (eg pk/sk etc)
     all: (data) => keyExp`#pk = ${data.pk}`,
     first10: (data) => ({ ...keyExp`#pk = ${data.pk}`, Limit: 10 }),
     beginsWith: ({ pk, sk }) => keyExp`#pk = ${pk} AND begins_with(#sk, ${sk})`,
@@ -55,12 +55,6 @@ const mySchema = {
       ...keyExp`#gsi1pk = ${gsi1pk} AND #sk BETWEEN ${gsi1sk} AND ${hi.gsi1sk}`,
       IndexName: "gsi1",
     }),
-  },
-  scans: {
-    // The scan condition expressions used in scans returned in udb(schema).scans
-  },
-  filters: {
-    // Filter expressions returned unchanged in udb(schema).filters
   },
 };
 

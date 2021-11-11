@@ -22,7 +22,7 @@
     "@aws-sdk/client-s3": "^3.39.0",
     "@aws-sdk/client-ssm": "^3.39.0",
     "@aws-sdk/util-dynamodb": "^3.39.0",
-    "@serverless-stack/cli": "0.50.1",
-    "@serverless-stack/resources": "0.50.1"
+    "@serverless-stack/cli": "0.51.0",
+    "@serverless-stack/resources": "0.51.0"
   }
 }

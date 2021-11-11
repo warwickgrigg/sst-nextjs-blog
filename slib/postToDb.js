@@ -2,9 +2,9 @@ import db from "../slib/db.js";
 import fromMarkdown from "../slib/fromMarkdown.js";
 import getObject from "../slib/getObject.js";
 
-const { queries: q, query } = db;
-console.log("udb prepped", q);
-//
+const { conditions: q, query } = db;
+// console.log("udb prepped", q);
+
 // const prefix = "blog/";
 // const listParams = { ...bucketParams, Prefix: prefix };
 
@@ -29,7 +29,7 @@ export default async function postToDb(bucket, key) {
 
   const written = await db.put([item]);
 
-  const [gotBetween] = await query(q.between([item, { ...item, id: "e" }]));
+  const [gotBetween] = await query(q.between([{ ...item, id: "a" }, item]));
 
   console.log({ item, gotBetween });
 

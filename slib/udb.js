@@ -207,20 +207,11 @@ const udb = (schema) => {
 
   const withCalcs = (data) => maybeMap((d) => ({ ...d, ...getCalcs(d) }))(data);
 
-  /*
-  const makeQueriesWithCalcs = ([command, condFns]) =>
-    mapObj(condFns)((f) => (data) => queryOrScan(command, f(withCalcs(data))));
+  const enrichWithCalcs = (f) => (data) => f(withCalcs(data));
 
-  const [queries, scans] = [
-    [QueryCommand, schema.queries],
-    [ScanCommand, schema.scans],
-  ].map(makeQueriesWithCalcs);
-  */
-  const makeQueriesWithCalcs = mapObj((f) => (data) => f(withCalcs(data)));
+  const conditions = mapObj(enrichWithCalcs)(schema.conditions);
 
-  const [queries, scans] = [schema.queries, schema.scans].map(
-    makeQueriesWithCalcs
-  );
+  // console.log({ conditions, schemas: schema.conditions });
 
   const update = async (data, params) =>
     dbDo(UpdateItemCommand, {
@@ -229,7 +220,17 @@ const udb = (schema) => {
       ...params,
     });
 
-  return { get, put, del, query, scan, update, getCalcs, queries, scans, dbDo };
+  return {
+    get,
+    put,
+    del,
+    query,
+    scan,
+    update,
+    getCalcs,
+    conditions,
+    dbDo,
+  };
 };
 
 export { udb, sKey, keyExp, filterExp, dExp, dehash };
