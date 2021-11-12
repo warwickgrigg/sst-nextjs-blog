@@ -46,7 +46,17 @@ import {
   QueryCommand,
   ScanCommand,
   UpdateItemCommand,
+  CreateTableCommand,
 } from "@aws-sdk/client-dynamodb";
+
+const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+const endpoint = process.env.DDB_ENDPOINT; // 'http://localhost:4567' for fake
+
+const ddbProps = endpoint ? { endpoint } : {};
+
+if (accessKeyId || secretAccessKey)
+  ddbProps.credentials = { accessKeyId, secretAccessKey };
 
 /*
   const intersection(array1, array2) =>  {
@@ -115,8 +125,26 @@ const udb = (schema) => {
     timestamps: ["_created", "_modified"], // default
     ...schema,
   };
-  const ddbClient = new DynamoDBClient(db.region);
+  const ddbClient = new DynamoDBClient({ ...ddbProps, region: db.region });
   const dbDo = (Command, ...params) => ddbClient.send(new Command(...params));
+
+  const create = () => {
+    const keys = db.indexes.primaryIndex;
+    const AttributeType = "S";
+    const keyType = ["HASH", "RANGE"];
+    const params = {
+      AttributeDefinitions: keys.map((name) => ({
+        AttributeName: name,
+        AttributeType,
+      })),
+      KeySchema: keys.map((name, i) => ({
+        AttributeName: name,
+        KeyType: keyType[i],
+      })),
+      TableName: db.table,
+    };
+    return dbDo(CreateTableCommand, params);
+  };
 
   const deCalc = (data) => {
     const { calc } = db.entities[data.entityType];
@@ -229,6 +257,7 @@ const udb = (schema) => {
     update,
     getCalcs,
     conditions,
+    create,
     dbDo,
   };
 };
