@@ -1,7 +1,8 @@
 import Markdown from "markdown-to-jsx";
-import db from "../slib/db.js";
-import fromMarkdown from "../slib/fromMarkdown.js";
-import getObject from "../slib/getObject.js";
+import db from "@/slib/db.js";
+import fromMarkdown from "@/slib/fromMarkdown.js";
+import { getObject } from "@/slib/s3.js";
+import handle from "@/slib/handle.js";
 
 const bucketName =
   process.env.BUCKET_NAME_FOR_LOCALHOST || process.env.BUCKET_NAME;
@@ -9,31 +10,33 @@ const testVar = process.env.TEST_VAR;
 
 const entityType = "post";
 const postType = "blog";
+const prefix = `${postType}/`;
 
-const q = db.queries;
-console.log("udb prepped", q);
+const getPostRefs = async () => {
+  const { conditions: c, query } = db;
+  return query(c.first10({ entityType, postType }));
+};
 
 const getPost = async (id) => {
   if (!bucketName || bucketName.slice(0, 3) === "{{ ") return; // fail safe
-  const key = `${prefix}${id}`;
-  console.log({ key });
-  const r = await s3.send(new GetObjectCommand({ ...bucketParams, Key: key }));
-  return streamToString(r.Body);
+  const object = await getObject(bucketName, `${prefix}${id}.md`);
+  console.log({ object, markdown: fromMarkdown(object) });
+  return fromMarkdown(object);
 };
 
-const getPostKeys = async () => q.all;
-
 export async function getStaticPaths() {
-  const staticKeys = (await getPostKeys()).slice(0, 1); // just one
-  console.log({ staticKeys });
-  const paths = staticKeys.map((id) => ({ params: { id } }));
+  const [r, err] = await handle(getPostRefs());
+
+  if (err) throw new Error(`Could not get post paths because ${err}`);
+  const [refs] = r;
+  const paths = refs.slice(0, 1).map(({ id }) => ({ params: { id } }));
   return { paths, fallback: "blocking" };
 }
 
 export async function getStaticProps({ params }) {
   const post = await getPost(params.id);
   console.log({ bucketName, testVar, post });
-  return post ? { props: { post } } : { notFound: true };
+  return post ? { props: post } : { notFound: true };
 }
 
 // eslint-disable-next-line no-unused-vars
@@ -53,7 +56,7 @@ const Post = ({ heading, createdDate, writtenBy, img, content }) => (
     ) */}
     <br />
     {/* eslint-disable-next-line react/no-children-prop */}
-    <Markdown children={content} />
+    <Markdown children={content || ""} />
   </>
 );
 
@@ -99,7 +102,7 @@ const getPost = async (id) => {
   return streamToString(r.Body);
 };
 
-const getPostKeys = async () => {
+const getPostRefs = async () => {
   console.log({ bucketName, testVar });
   if (!bucketName || bucketName.slice(0, 3) === "{{ ") return []; // fail safe
   const s3Response = await s3.send(new ListObjectsV2Command(listParams));
@@ -107,7 +110,7 @@ const getPostKeys = async () => {
 };
 
 export async function getStaticPaths() {
-  const staticKeys = (await getPostKeys()).slice(0, 1); // just one
+  const staticKeys = (await getPostRefs()).slice(0, 1); // just one
   console.log({ staticKeys });
   const paths = staticKeys.map((id) => ({ params: { id } }));
   return { paths, fallback: "blocking" };

@@ -1,5 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# s3rver s3 faker data
+/s3rverData
+
 # dependencies
 /node_modules
 /.pnp

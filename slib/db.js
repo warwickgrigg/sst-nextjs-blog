@@ -1,13 +1,29 @@
 import { udb, sKey, keyExp } from "../slib/udb.js";
 
-const ddbTable = process.env.TABLE_NAME;
-const region = process.env.REGION;
+const isFakeDynamoDB = process.env.IS_FAKE_DDB;
+const [tableName, region, accessKeyId, secretAccessKey, endpoint] =
+  isFakeDynamoDB
+    ? ["myTable", "eu-west-2", "fake", "fake", "http://localhost:4567"]
+    : [
+        process.env.TABLE_NAME,
+        process.env.REGION,
+        process.env.AWS_ACCESS_KEY_ID,
+        process.env.AWS_SECRET_ACCESS_KEY,
+        process.env.DDB_ENDPOINT,
+      ];
+
+const ddbProps = { REGION: region };
+
+if (endpoint) ddbProps.endpoint = endpoint;
+
+if (accessKeyId || secretAccessKey)
+  ddbProps.credentials = { accessKeyId, secretAccessKey };
 
 const seq = (s) => ("00000" + (parseInt(s) || 0)).slice(-6);
 
 const mySchema = {
-  region,
-  table: ddbTable,
+  ddbProps,
+  table: tableName,
   indexes: {
     primaryIndex: ["pk", "sk"],
     // also, optionally, secondary indexes
@@ -58,6 +74,10 @@ const mySchema = {
   },
 };
 
-const db = udb(mySchema);
+const db = async () => {
+  const d = udb(mySchema);
+  if (isFakeDynamoDB) await d.create().catch();
+  return d;
+};
 
-export default db;
+export default db();

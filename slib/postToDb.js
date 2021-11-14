@@ -1,14 +1,14 @@
 import db from "../slib/db.js";
 import fromMarkdown from "../slib/fromMarkdown.js";
-import getObject from "../slib/getObject.js";
+import { getObject } from "../slib/s3.js";
 
-const { conditions: q, query } = db;
 // console.log("udb prepped", q);
 
 // const prefix = "blog/";
 // const listParams = { ...bucketParams, Prefix: prefix };
 
 export default async function postToDb(bucket, key) {
+  const { conditions: q, query } = await db;
   const content = await getObject(bucket, key);
 
   const keyPath = key.split("/").slice(0, -1).join("/");

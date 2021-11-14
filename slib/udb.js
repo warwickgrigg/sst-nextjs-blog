@@ -6,7 +6,7 @@
    Example schema
 
 const schema = {
-  region,
+  ddbProps, // region, credentials etc
   table: "", // placeholder - table name
   indexes: {primaryIndex: ["pk", "sk"]}, // default. maybe also ... gsi1:[], gsi2:[] etc
   timestamps: ["_created", "_modified"], // default
@@ -48,15 +48,6 @@ import {
   UpdateItemCommand,
   CreateTableCommand,
 } from "@aws-sdk/client-dynamodb";
-
-const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
-const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
-const endpoint = process.env.DDB_ENDPOINT; // 'http://localhost:4567' for fake
-
-const ddbProps = endpoint ? { endpoint } : {};
-
-if (accessKeyId || secretAccessKey)
-  ddbProps.credentials = { accessKeyId, secretAccessKey };
 
 /*
   const intersection(array1, array2) =>  {
@@ -125,7 +116,7 @@ const udb = (schema) => {
     timestamps: ["_created", "_modified"], // default
     ...schema,
   };
-  const ddbClient = new DynamoDBClient({ ...ddbProps, region: db.region });
+  const ddbClient = new DynamoDBClient(schema.ddbProps);
   const dbDo = (Command, ...params) => ddbClient.send(new Command(...params));
 
   const create = () => {
@@ -142,6 +133,7 @@ const udb = (schema) => {
         KeyType: keyType[i],
       })),
       TableName: db.table,
+      BillingMode: "PAY_PER_REQUEST",
     };
     return dbDo(CreateTableCommand, params);
   };
@@ -191,6 +183,7 @@ const udb = (schema) => {
       });
     const [request, props] = Object.entries(data[0])[0];
     const params = { TableName: db.table, ...props };
+    console.log({ params });
     if (request === "PutRequest") return dbDo(PutItemCommand, params);
     return dbDo(DeleteItemCommand, params);
   };

@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/slib/*": ["../slib/*"]
+    }
+  },
+  "exclude": ["node_modules"]
+}

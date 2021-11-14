@@ -7,10 +7,19 @@
     "start": "sst start",
     "build": "sst build",
     "deploy": "sst deploy",
-    "remove": "sst remove"
+    "remove": "sst remove",
+    "s3Sandbox": "s3rver -d ./s3rverData/ --configure-bucket mybucket",
+    "s3SandboxData": "AWS_ACCESS_KEY_ID=S3RVER AWS_SECRET_ACCESS_KEY=S3RVER aws --endpoint-url='http://127.0.0.1:4568' s3 cp  ./content/bucket/ s3://mybucket/ --recursive",
+    "dynamoSandbox": "dynalite",
+    "dynamoSandboxData": "AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake aws --endpoint-url='http://127.0.0.1:4567' dynamodb list-tables",
+    "processLocalObjects": "esbuild --bundle --platform=node utils/processLocalObjects.js | node"
   },
   "devDependencies": {
-    "@aws-cdk/assert": "1.126.0"
+    "@aws-cdk/assert": "1.126.0",
+    "dynalite": "^3.2.1",
+    "esbuild": "^0.13.13",
+    "esm": "^3.2.25",
+    "s3rver": "^3.7.1"
   },
   "dependencies": {
     "@aws-cdk/aws-dynamodb": "1.126.0",

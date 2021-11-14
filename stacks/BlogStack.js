@@ -63,8 +63,13 @@ export default class MyStack extends Stack {
     });
 
     contentBucket.attachPermissions([table, contentBucket]);
+    environment.BUCKET_NAME = contentBucket.bucketName;
+    this.addOutputs({ BUCKET_NAME: contentBucket.bucketName });
 
     /*
+
+    // Deploy bucket contents to S3
+
     new s3deploy.BucketDeployment(this, "DeployContentPostBucket", {
       sources: [s3deploy.Source.asset("./content/bucket/blog")],
       destinationBucket: contentBucket.s3Bucket,
@@ -72,26 +77,16 @@ export default class MyStack extends Stack {
     });
     */
 
-    environment.BUCKET_NAME = contentBucket.bucketName;
-
-    this.addOutputs({ BUCKET_NAME: contentBucket.bucketName });
-
     // Define the ssm paramter
     new ssm.StringParameter(this, "ContentBucketNameParameter", {
       parameterName: ssmParamName,
       stringValue: contentBucket.bucketName,
     });
 
-    /*
     // Define the Next.js site
     const site = new NextjsSite(this, "Site", {
       path: "frontend",
-      environment: {
-        // Pass the bucket details to our app
-        REGION: scope.region,
-        BUCKET_NAME: bucketName,
-        TEST_VAR: "TEST_VAR contents",
-      },
+      environment,
     });
 
     // Allow the Next.js site to access the content bucket
@@ -104,6 +99,5 @@ export default class MyStack extends Stack {
         ? ""
         : "Rerun 'sst deploy' to generate static pages from s3 bucket",
     });
-    */
   }
 }
