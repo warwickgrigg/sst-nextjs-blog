@@ -1,23 +1,29 @@
 import { udb, sKey, keyExp } from "../slib/udb.js";
+// import handle from "../slib/handle.js";
 
-const isFakeDynamoDB = process.env.IS_FAKE_DDB;
-const [tableName, region, accessKeyId, secretAccessKey, endpoint] =
-  isFakeDynamoDB
-    ? ["myTable", "eu-west-2", "fake", "fake", "http://localhost:4567"]
-    : [
-        process.env.TABLE_NAME,
-        process.env.REGION,
-        process.env.AWS_ACCESS_KEY_ID,
-        process.env.AWS_SECRET_ACCESS_KEY,
-        process.env.DDB_ENDPOINT,
-      ];
+// Get process.env config
+
+const fakeDynamoDB = process.env.FAKE_DDB; // convenience override
+const [tableName, endpoint, accessKeyId, secretAccessKey] = fakeDynamoDB
+  ? ["myTable", "http://localhost:4567", "fake", "fake"]
+  : [process.env.TABLE_NAME];
+
+const region = process.env.REGION || process.env.AWS_REGION || "eu-west-2";
+
+// Always set REGION in Dynamo DB config props
 
 const ddbProps = { REGION: region };
+
+// Optionally set Dynamo DB config props
 
 if (endpoint) ddbProps.endpoint = endpoint;
 
 if (accessKeyId || secretAccessKey)
   ddbProps.credentials = { accessKeyId, secretAccessKey };
+
+console.log({ ddbProps });
+
+// Main
 
 const seq = (s) => ("00000" + (parseInt(s) || 0)).slice(-6);
 
@@ -40,7 +46,7 @@ const mySchema = {
         sk: ({ id }) => sKey`seq#${seq(id)}#post#${id}#`,
       },
       // Denormalise the item via cascade function
-      cascade: ({ postType, id, extension, tags }) => [
+      cascade: ({ postType, id, extension, title, tags }) => [
         ...(!tags
           ? []
           : tags.split(",").map((tag) => ({
@@ -48,6 +54,7 @@ const mySchema = {
               postType,
               tag: tag.trim(),
               tags,
+              title,
               id,
               extension,
             }))),
@@ -74,10 +81,18 @@ const mySchema = {
   },
 };
 
-const db = async () => {
+const initDb = async () => {
+  // May need to create the table for fake db. Always return a Promise
   const d = udb(mySchema);
-  if (isFakeDynamoDB) await d.create().catch();
+  if (fakeDynamoDB) {
+    console.log("Initialising Fake DynamoDB");
+    d.create().catch((e) => console.log(`Fake DynamoDB warning ${e}`));
+    // await 1000ms to allow table to be created
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
   return d;
 };
 
-export default db();
+const dbPromise = initDb();
+
+export default dbPromise;

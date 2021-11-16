@@ -1,5 +1,5 @@
 import { stat, readdir, readFile } from "fs/promises";
-import { join } from "path";
+import { join, resolve } from "path";
 
 async function recursiveList(directoryPath) {
   const files = await readdir(directoryPath);
@@ -17,16 +17,16 @@ async function recursiveList(directoryPath) {
   return filePaths;
 }
 
-const s3fsBasePath = process.env.S3FS_BASE_PATH || "./content";
+const s3fsPath = resolve(process.env.S3FS_PATH || "./content");
 
 export async function listObjects(bucketName = "bucket", prefix) {
-  const bucketPath = join(s3fsBasePath, bucketName);
+  const bucketPath = join(s3fsPath, bucketName);
   const prefixPath = join(bucketPath, prefix);
   const r = await recursiveList(prefixPath);
   return r.map((fPath) => fPath.slice(bucketPath.length + 1));
 }
 
 export async function getObject(bucketName, key) {
-  const objectPath = join(s3fsBasePath, bucketName, key);
+  const objectPath = join(s3fsPath, bucketName, key);
   return (await readFile(objectPath)).toString();
 }

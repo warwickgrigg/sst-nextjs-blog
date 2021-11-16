@@ -1,25 +1,26 @@
 import Markdown from "markdown-to-jsx";
 import db from "@/slib/db.js";
 import fromMarkdown from "@/slib/fromMarkdown.js";
-import { getObject } from "@/slib/s3.js";
+import { getObject } from "slib/s3";
 import handle from "@/slib/handle.js";
-
-const bucketName =
-  process.env.BUCKET_NAME_FOR_LOCALHOST || process.env.BUCKET_NAME;
-const testVar = process.env.TEST_VAR;
 
 const entityType = "post";
 const postType = "blog";
 const prefix = `${postType}/`;
 
 const getPostRefs = async () => {
-  const { conditions: c, query } = db;
+  const { conditions: c, query } = await db;
   return query(c.first10({ entityType, postType }));
 };
 
 const getPost = async (id) => {
+  const testVar = process.env.TEST_VAR;
+  const bucketName =
+    process.env.BUCKET_NAME_FOR_LOCALHOST || process.env.BUCKET_NAME;
+  const objectName = `${prefix}${id}.md`;
+  console.log({ bucketName, objectName, testVar });
   if (!bucketName || bucketName.slice(0, 3) === "{{ ") return; // fail safe
-  const object = await getObject(bucketName, `${prefix}${id}.md`);
+  const object = await getObject(bucketName, objectName);
   console.log({ object, markdown: fromMarkdown(object) });
   return fromMarkdown(object);
 };
@@ -35,7 +36,6 @@ export async function getStaticPaths() {
 
 export async function getStaticProps({ params }) {
   const post = await getPost(params.id);
-  console.log({ bucketName, testVar, post });
   return post ? { props: post } : { notFound: true };
 }
 

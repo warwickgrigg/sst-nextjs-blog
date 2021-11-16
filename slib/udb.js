@@ -69,19 +69,21 @@ const maybeMap = (f) => (d) => Array.isArray(d) ? d.map(f) : f(d);
 const dehash = (s, hash = "#", escape = "\\") =>
   !s ? s : s.replace(escape, escape + escape).replace(hash, escape + "d");
 
-// Tagged template functions
+// Factory functions for tagged template functions
 
-const sKey = (strings, ...keys) => {
-  const r = [];
-  for (let i = 0; i < strings.length; i += 1) {
-    r.push(strings[i]);
-    if (i < keys.length) r.push(dehash(keys[i]));
-  }
-  return r.join("");
-};
+const keyFactory =
+  ({ hash = "#", escape = "\\" }) =>
+  (strings, ...keys) => {
+    const r = [];
+    for (let i = 0; i < strings.length; i += 1) {
+      r.push(strings[i]);
+      if (i < keys.length) r.push(dehash(keys[i], hash, escape));
+    }
+    return r.join("");
+  };
 
-const dExp =
-  (prefix) =>
+const expressionFactory =
+  ({ prefix }) =>
   (strings, ...values) => {
     const r = { values: {}, names: {}, expressionParts: [] };
     const valueUsedCount = {};
@@ -107,8 +109,9 @@ const dExp =
     };
   };
 
-const keyExp = dExp("KeyCondition");
-const filterExp = dExp("Filter");
+const keyExp = expressionFactory({ prefix: "KeyCondition" });
+const filterExp = expressionFactory({ prefix: "Filter" });
+const sKey = keyFactory({});
 
 const udb = (schema) => {
   const db = {
@@ -183,7 +186,7 @@ const udb = (schema) => {
       });
     const [request, props] = Object.entries(data[0])[0];
     const params = { TableName: db.table, ...props };
-    console.log({ params });
+    // console.log({ params });
     if (request === "PutRequest") return dbDo(PutItemCommand, params);
     return dbDo(DeleteItemCommand, params);
   };
@@ -219,6 +222,7 @@ const udb = (schema) => {
 
   const queryOrScan = async (command, params) => {
     const r = await dbDo(command, { TableName: db.table, ...params });
+    console.log(JSON.stringify({ params }));
     const items = r.Items.map((item) => deCalc(unmarshall(item)));
     return [items, r];
   };
@@ -255,7 +259,7 @@ const udb = (schema) => {
   };
 };
 
-export { udb, sKey, keyExp, filterExp, dExp, dehash };
+export { udb, sKey, keyExp, filterExp, expressionFactory, dehash };
 
 /*
 const attributes = (data) => {

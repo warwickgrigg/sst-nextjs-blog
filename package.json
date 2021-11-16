@@ -12,6 +12,7 @@
     "s3SandboxData": "AWS_ACCESS_KEY_ID=S3RVER AWS_SECRET_ACCESS_KEY=S3RVER aws --endpoint-url='http://127.0.0.1:4568' s3 cp  ./content/bucket/ s3://mybucket/ --recursive",
     "dynamoSandbox": "dynalite",
     "dynamoSandboxData": "AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake aws --endpoint-url='http://127.0.0.1:4567' dynamodb list-tables",
+    "dynamoSandboxGUI": "DYNAMO_ENDPOINT=http://localhost:4567 dynamodb-admin",
     "processLocalObjects": "esbuild --bundle --platform=node utils/processLocalObjects.js | node"
   },
   "devDependencies": {

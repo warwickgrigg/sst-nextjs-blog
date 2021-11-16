@@ -2,7 +2,8 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/slib/*": ["../slib/*"]
+      "@/slib/*": ["../slib/*"],
+      "Slib/*": ["../slib/*"]
     }
   },
   "exclude": ["node_modules"]

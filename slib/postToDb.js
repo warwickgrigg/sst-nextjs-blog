@@ -1,14 +1,9 @@
-import db from "../slib/db.js";
+import dbPromise from "../slib/db.js";
 import fromMarkdown from "../slib/fromMarkdown.js";
-import { getObject } from "../slib/s3.js";
-
-// console.log("udb prepped", q);
-
-// const prefix = "blog/";
-// const listParams = { ...bucketParams, Prefix: prefix };
+import { getObject } from "@/slib/s3.js";
+import handle from "../slib/handle.js";
 
 export default async function postToDb(bucket, key) {
-  const { conditions: q, query } = await db;
   const content = await getObject(bucket, key);
 
   const keyPath = key.split("/").slice(0, -1).join("/");
@@ -26,44 +21,8 @@ export default async function postToDb(bucket, key) {
   const item = { entityType, postType, id, extension, title, heading, tags };
   if (createdDate)
     item.createdDate = new Date(Date.parse(createdDate)).toISOString();
-
-  const written = await db.put([item]);
-
-  const [gotBetween] = await query(q.between([{ ...item, id: "a" }, item]));
-
-  console.log({ item, gotBetween });
-
-  return [item, written];
+  const db = await dbPromise;
+  const [written, err] = await handle(db.put([item]));
+  if (err) throw new Error(`Error putting item ${item} because ${err}`);
+  return [item, written[0]];
 }
-
-/*
-
-// eslint-disable-next-line no-unused-vars
-
-
-const updated = await db.put(written);
-  const fetched = await db.get(data);
-  const [gotBegins] = await q.beginsWith(data);
-  console.log({ gotBegins });
-
-  const [gotBetween] = await q.between([data, { ...data, id: "e" }]);
-
-  console.log({ data, written, updated, fetched, gotBetween, gotBegins });
-  const tagQuery = {
-    entityType: "postTag",
-    postType: "blog",
-    tag: "mytag",
-  };
-  const [gotTagged] = await q.all(tagQuery);
-
-  console.log({ gotTagged });
-  const bRec = {
-    entityType: "post",
-    postType: "blog",
-    id: "b.txt",
-    tags: "mytag, othertag",
-  };
-  const deleted = await db.del(bRec);
-  console.log({ deleted });
-
-*/

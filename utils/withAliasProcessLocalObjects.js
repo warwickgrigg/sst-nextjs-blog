@@ -2,7 +2,8 @@ let onResolvePlugin = {
   name: "example",
   setup(build) {
     let path = require("path");
-    build.onResolve({ filter: /slib\/s3.js/ }, (args) => {
+    // eslint-disable-next-line no-unused-vars
+    build.onResolve({ filter: /^@\/slib\/s3.js$/ }, (args) => {
       // console.error({ args, cwd: process.cwd(), dirname: __dirname });
       return { path: path.join(process.cwd(), "slib/s3fs.js") };
     });
