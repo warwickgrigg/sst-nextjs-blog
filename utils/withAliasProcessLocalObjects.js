@@ -7,6 +7,12 @@ let onResolvePlugin = {
       // console.error({ args, cwd: process.cwd(), dirname: __dirname });
       return { path: path.join(process.cwd(), "slib/s3fs.js") };
     });
+    build.onResolve({ filter: /^@\// }, (args) => {
+      // console.error({ args, cwd: process.cwd(), dirname: __dirname });
+      return { path: path.join(process.cwd(), args.path.slice(2)) };
+    });
+
+    // Examples
 
     /*
     let path = require("path");

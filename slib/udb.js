@@ -233,6 +233,7 @@ const udb = (schema) => {
   const withCalcs = (data) => maybeMap((d) => ({ ...d, ...getCalcs(d) }))(data);
 
   const enrichWithCalcs = (f) => (data) => f(withCalcs(data));
+  // const inject = (f) => (data) => f(withCalcs(data));
 
   const conditions = mapObj(enrichWithCalcs)(schema.conditions);
 

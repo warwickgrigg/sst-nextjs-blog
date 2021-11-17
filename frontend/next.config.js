@@ -1,4 +1,5 @@
 let path = require("path");
+const fakeS3 = process.env.S3FS_PATH;
 module.exports = {
   env: {
     /*
@@ -13,12 +14,17 @@ module.exports = {
   // eslint-disable-next-line no-unused-vars
   webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
     // Important: return the modified config
-    if (dev) {
+    if (fakeS3) {
+      // console.log({ defaultLoaders });
       const devAliases = {
         "Slib/s3": path.resolve(__dirname, "../slib/s3fs.js"),
+        "Slib/s3.js": path.resolve(__dirname, "../slib/s3fs.js"),
         "slib/s3": path.resolve(__dirname, "../slib/s3fs.js"),
+        "slib/s3.js": path.resolve(__dirname, "../slib/s3fs.js"),
+        "../slib/s3": path.resolve(__dirname, "../slib/s3fs.js"),
+        "../slib/s3.js": path.resolve(__dirname, "../slib/s3fs.js"),
       };
-      console.log({ devAliases });
+      // console.log({ devAliases });
       config.resolve.alias = { ...config.resolve.alias, ...devAliases };
     }
     return config;
