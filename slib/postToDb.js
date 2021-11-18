@@ -41,10 +41,7 @@ export default async function postToDb(bucket, key) {
     ];
   });
 
-  if (relatedtoWrite.length) {
-    console.log({ id, relatedtoWrite });
-    await db.put(relatedtoWrite);
-  }
+  if (relatedtoWrite.length) await db.put(relatedtoWrite);
 
   return [item, written[0]];
 }

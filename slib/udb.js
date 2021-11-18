@@ -189,7 +189,6 @@ const udb = (schema) => {
       const recursiveCascade = (c) => {
         const calcs = getCalcs(c);
         const expanded = { ...c, ...calcs, ...stamps };
-        console.log({ c, calcs, stamps, expanded });
         r.dataToWrite.push(expanded);
         const { cascade } = db.entities[c.entityType];
         if (cascade) cascade(expanded).forEach(recursiveCascade);
@@ -216,7 +215,7 @@ const udb = (schema) => {
 
   const put = async (data) => {
     const { roots, dataToWrite } = toWrite(data);
-    console.log("to write", { dataToWrite });
+    // console.log("to write", { dataToWrite });
     const requestItems = dataToWrite.map((item) => ({
       PutRequest: { Item: marshall(item) },
     }));
