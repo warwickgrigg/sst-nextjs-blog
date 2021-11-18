@@ -1,20 +1,18 @@
 import Markdown from "markdown-to-jsx";
 import db from "@/slib/db.js";
+// import { filterExp } from "@/slib/udb.js";
 import fromMarkdown from "@/slib/fromMarkdown.js";
 import { getObject } from "slib/s3.js"; // can't get Slib/s3.js to alias
 import handle from "@/slib/handle.js";
+import getRelatedPosts from "@/slib/getRelatedPosts.js";
 
 const postDef = { entityType: "post", postType: "blog" };
 const prefix = `${postDef.postType}/`;
 
 const getPostRefs = async () => {
   const { conditions: c, query } = await db;
-  const postExpressions = {
-    allExp: c.all(postDef),
-    first10Exp: { ...c.all(postDef), Limit: 10 },
-    end10Exp: { ...c.all(postDef), Limit: 10, ScanIndexForward: false },
-  };
-  return query(postExpressions.allExp);
+  const end10Exp = { ...c.all(postDef), Limit: 10, ScanIndexForward: false };
+  return query(end10Exp);
 };
 
 const getPost = async (id) => {
@@ -24,9 +22,12 @@ const getPost = async (id) => {
   const objectName = `${prefix}${id}.md`;
   console.log({ bucketName, objectName, testVar });
   if (!bucketName || bucketName.slice(0, 3) === "{{ ") return; // fail safe
-  const object = await getObject(bucketName, objectName);
-  console.log({ object, markdown: fromMarkdown(object) });
-  return fromMarkdown(object);
+  const md = await getObject(bucketName, objectName);
+  const post = fromMarkdown(md);
+  console.log({
+    related: await getRelatedPosts({ ...post, postType: "blog" }),
+  });
+  return post;
 };
 
 export async function getStaticPaths() {

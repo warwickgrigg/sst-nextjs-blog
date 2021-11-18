@@ -66,6 +66,28 @@ const mapObj = (o) => (f) =>
   */
 const toArray = (a) => (Array.isArray(a) ? a : [a]);
 const maybeMap = (f) => (d) => Array.isArray(d) ? d.map(f) : f(d);
+const deepMerge = (object1, ...rest) => {
+  const deepMerge2 = (obj1, obj2) => {
+    if (Array.isArray(obj1) && Array.isArray(obj2)) {
+      return obj1.concat(obj2);
+    }
+    if (typeof obj1 === "object" && typeof obj2 === "object") {
+      const obj3 = {};
+      for (const key in obj1) {
+        obj3[key] = deepMerge(obj1[key], obj2[key]);
+      }
+      for (const key in obj2) {
+        if (!(key in obj1)) {
+          obj3[key] = deepMerge(undefined, obj2[key]);
+        }
+      }
+      return obj3;
+    }
+    return obj2 !== undefined ? obj2 : obj1;
+  };
+  return rest.reduce(deepMerge2, object1);
+};
+
 const dehash = (s, hash = "#", escape = "\\") =>
   !s ? s : s.replace(escape, escape + escape).replace(hash, escape + "d");
 
@@ -151,8 +173,7 @@ const udb = (schema) => {
   const getCalcs = (data, names) => {
     const { calc } = db.entities[data.entityType];
     const r = {};
-    for (const k of names || Object.keys(calc))
-      r[k] = k in data ? data[k] : calc[k](data);
+    for (const k of names || Object.keys(calc)) r[k] = calc[k](data);
     return r;
   };
 
@@ -166,7 +187,9 @@ const udb = (schema) => {
     toArray(data).forEach((d) => {
       const stamps = d[ctd] ? { [ctd]: d[ctd], [mod]: now } : { [ctd]: now };
       const recursiveCascade = (c) => {
-        const expanded = { ...c, ...getCalcs(c), ...stamps };
+        const calcs = getCalcs(c);
+        const expanded = { ...c, ...calcs, ...stamps };
+        console.log({ c, calcs, stamps, expanded });
         r.dataToWrite.push(expanded);
         const { cascade } = db.entities[c.entityType];
         if (cascade) cascade(expanded).forEach(recursiveCascade);
@@ -185,7 +208,7 @@ const udb = (schema) => {
         RequestItems: { [TableName]: data },
       });
     const [request, props] = Object.entries(data[0])[0];
-    const params = { TableName: db.table, ...props };
+    const params = { TableName, ...props };
     // console.log({ params });
     if (request === "PutRequest") return dbDo(PutItemCommand, params);
     return dbDo(DeleteItemCommand, params);
@@ -193,6 +216,7 @@ const udb = (schema) => {
 
   const put = async (data) => {
     const { roots, dataToWrite } = toWrite(data);
+    console.log("to write", { dataToWrite });
     const requestItems = dataToWrite.map((item) => ({
       PutRequest: { Item: marshall(item) },
     }));
@@ -220,9 +244,12 @@ const udb = (schema) => {
     return [deCalc(unmarshall((await dbDo(GetItemCommand, props)).Item))];
   };
 
-  const queryOrScan = async (command, params) => {
-    const r = await dbDo(command, { TableName: db.table, ...params });
-    console.log(JSON.stringify({ params }));
+  const queryOrScan = async (command, ...params) => {
+    const r = await dbDo(
+      command,
+      deepMerge({ TableName: db.table }, ...params)
+    );
+
     const items = r.Items.map((item) => deCalc(unmarshall(item)));
     return [items, r];
   };

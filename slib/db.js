@@ -66,16 +66,23 @@ const mySchema = {
         sk: ({ id }) => sKey`seq#${seq(id)}#post#${id}#`,
       },
     },
+    relatedPost: {
+      calc: {
+        pk: ({ postType }) => sKey`relatedPost#${postType}`,
+        sk: ({ id, relatedId }) =>
+          sKey`seq#${seq(id)}#post#${id}#` +
+          sKey`seq#${seq(relatedId)}#post#${relatedId}#`,
+      },
+      /*
+      cascade: ({ id, relatedId, mirror, ...rest }) =>
+        mirror ? [] : [{ id: relatedId, relatedId: id, mirror: true, ...rest }],
+      */
+    },
   },
   conditions: {
     // returned in udb(schema).conditions enriched with calc attributes (eg pk/sk etc)
     all: (data) => keyExp`#pk = ${data.pk}`,
     first10: (data) => ({ ...keyExp`#pk = ${data.pk}`, Limit: 10 }),
-    end10: (data) => ({
-      ...keyExp`#pk = ${data.pk}`,
-      ScanIndexForward: false,
-      Limit: 10,
-    }),
     beginsWith: ({ pk, sk }) => keyExp`#pk = ${pk} AND begins_with(#sk, ${sk})`,
     between: ([{ pk, sk }, hi]) =>
       keyExp`#pk = ${pk} AND #sk BETWEEN ${sk} AND ${hi.sk}`,

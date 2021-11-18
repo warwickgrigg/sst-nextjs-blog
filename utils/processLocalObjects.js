@@ -10,19 +10,12 @@ import handle from "@/slib/handle.js";
   const list = await listObjects(bucketName, prefix);
   // const objects = await Promise.all(list.map((o) => getObject(bucketName, o)));
   // console.log({ list, objects });
-  const [written, err] = await handle(
-    Promise.all(list.map((o) => postToDb(bucketName, o)))
+  return Promise.all(
+    list.map(async (o) => {
+      const [data, objErr] = await handle(postToDb(bucketName, o));
+      if (objErr)
+        throw new Error(`Cannot process object ${o} because ${objErr}`);
+      return data;
+    })
   );
-  if (err) console.log(`Error ${err}`);
-  console.log(JSON.stringify(written, null, 2));
-
-  const item = { entityType: "post", postType: "blog" };
-  const [gotBetween] = await db.query(
-    db.conditions.between([
-      { ...item, id: "b" },
-      { ...item, id: "311" },
-    ])
-  );
-
-  console.log({ gotBetween });
 })();

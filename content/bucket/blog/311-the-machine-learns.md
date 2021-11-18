@@ -3,7 +3,7 @@ title: The Machine Learns
 id: 311-the-machine-learns
 heading: The Machine Learns
 createdDate: 02 March 2021
-tagsList: New Technology, Machine Learning
+tagsList: New Technology, Machine Learning, mytag, othertag
 img.id: Machine-Learning
 img.alt:
 img.title:
