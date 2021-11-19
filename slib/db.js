@@ -1,4 +1,4 @@
-import { udb, sKey, keyExp } from "../slib/udb.js";
+import { udb, sKey /*, keyExp */ } from "../slib/udb.js";
 import handle from "../slib/handle.js";
 
 // Get process.env config
@@ -20,8 +20,6 @@ if (endpoint) ddbProps.endpoint = endpoint;
 
 if (accessKeyId || secretAccessKey)
   ddbProps.credentials = { accessKeyId, secretAccessKey };
-
-console.log({ ddbProps });
 
 // Schema helper functions
 
@@ -95,7 +93,9 @@ const initDb = async () => {
   // May need to create the table for fake db. Always return a Promise
   const d = udb(mySchema);
   if (fakeDynamoDB) {
-    console.log("Initialising fake DynamoDB");
+    // eslint-disable-next-line no-unused-vars
+    const { credentials, ...reportableProps } = ddbProps;
+    console.log("Initialising fake DynamoDB", reportableProps);
     const err = await handle(d.create())[1];
     if (err && err.code === "ResourceInUseException") return d; // it's ready
     if (err) throw new Error(`Cannot open fake DynamoDB because ${err}`);

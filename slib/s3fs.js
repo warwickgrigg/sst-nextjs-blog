@@ -1,7 +1,7 @@
 import { stat, readdir, readFile } from "fs/promises";
 import { join, resolve } from "path";
 
-console.log("s3fs.js loaded")
+console.log("Fake S3 layer s3fs.js loading");
 
 async function recursiveList(directoryPath) {
   const files = await readdir(directoryPath);

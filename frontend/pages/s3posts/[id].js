@@ -4,6 +4,7 @@ import { keyExp, limit /*, filterExp*/ } from "@/slib/udb.js";
 import fromMarkdown from "@/slib/fromMarkdown.js";
 import { getObject } from "slib/s3.js"; // can't get Slib/s3.js to alias
 import handle from "@/slib/handle.js";
+import Post from "../../components/post.js";
 // import getRelatedPosts from "@/slib/getRelatedPosts.js";
 
 const postType = "blog";
@@ -12,9 +13,10 @@ const getRelatedPosts = async ({ id }) => {
   const { getKeys, query } = await db;
   const entityType = "relatedPost";
   const { pk, sk } = getKeys({ entityType, postType, id, relatedId: "" });
-  const condition = keyExp`#pk = ${pk} AND #sk begins_with ${sk.slice(0, -1)}`;
+  const skStart = sk.split("#").slice(0, 5).join("#");
+  const condition = keyExp`#pk = ${pk} AND begins_with(#sk, ${skStart})`;
   const ProjectionExpression = "title, relatedId";
-  return query(condition, ProjectionExpression, limit(-10));
+  return query(condition, /* ProjectionExpression, */ limit(-10));
 };
 
 const getRecentPosts = async () => {
@@ -37,38 +39,25 @@ const getPost = async (id) => {
 
 export async function getStaticPaths() {
   const [r, err] = await handle(getRecentPosts());
-
   if (err) throw new Error(`Could not get post paths because ${err}`);
-  const [refs] = r;
-  const paths = refs.slice(0, 10).map(({ id }) => ({ params: { id } }));
+  const paths = r[0].slice(0, 10).map(({ id }) => ({ params: { id } }));
   return { paths, fallback: "blocking" };
 }
 
 export async function getStaticProps({ params }) {
   const post = await getPost(params.id);
-  const [related = []] = await getRelatedPosts(post);
-  return post ? { props: { post, relatedPosts } } : { notFound: true };
+  const [related = [[]], relErr] = await handle(getRelatedPosts(post));
+  const relatedPosts = related[0].map(({ relatedId: id, title }) => ({
+    id,
+    title,
+  }));
+
+  const [recent = [[]], recErr] = await handle(getRecentPosts(post));
+  const recentPosts = recent[0];
+  console.log({ related, relErr, recentPosts, recErr });
+  return post
+    ? { props: { ...post, relatedPosts, recentPosts } }
+    : { notFound: true };
 }
-
-// eslint-disable-next-line no-unused-vars
-const PostBody = ({ heading, createdDate, writtenBy, img, content }) => (
-  <>
-    <h1> {heading} </h1>
-
-    <div className="flex justified">
-      <p>{createdDate}</p>
-      {!!writtenBy && <p>by {writtenBy}</p>}
-    </div>
-    {/* !!img && (
-      <Picture
-        src={`${staticAssetServerUrl}${assetPath}blog/${img.id}.jpg`}
-        alt={img.alt}
-      />
-    ) */}
-    <br />
-    {/* eslint-disable-next-line react/no-children-prop */}
-    <Markdown children={content || ""} />
-  </>
-);
 
 export default Post;
