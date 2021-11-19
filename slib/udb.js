@@ -54,39 +54,24 @@ import {
     const set = new Set(array2);
     return Array.from(new Set(array1.filter(elem => set.has(elem))));
   };
+  const pick = (keys) => (o) => Object.fromEntries(keys.map((k) => [k, o[k]]));
 */
 
-//const pick = (keys) => (o) => Object.fromEntries(keys.map((k) => [k, o[k]]));
-
-const mapObj = (f) => (o) =>
-  Object.fromEntries(Object.entries(o).map(([k, v]) => [k, f(v)]));
-/*
-const mapObj = (o) => (f) =>
-  Object.fromEntries(Object.entries(o).map(([k, v]) => [k, f(v)]));
-  */
 const toArray = (a) => (Array.isArray(a) ? a : [a]);
-const maybeMap = (f) => (d) => Array.isArray(d) ? d.map(f) : f(d);
-const deepMerge = (object1, ...rest) => {
-  const deepMerge2 = (obj1, obj2) => {
-    if (Array.isArray(obj1) && Array.isArray(obj2)) {
-      return obj1.concat(obj2);
-    }
-    if (typeof obj1 === "object" && typeof obj2 === "object") {
-      const obj3 = {};
-      for (const key in obj1) {
-        obj3[key] = deepMerge(obj1[key], obj2[key]);
-      }
-      for (const key in obj2) {
-        if (!(key in obj1)) {
-          obj3[key] = deepMerge(undefined, obj2[key]);
-        }
-      }
-      return obj3;
-    }
-    return obj2 !== undefined ? obj2 : obj1;
-  };
-  return rest.reduce(deepMerge2, object1);
+const deepMerge2 = (obj1, obj2) => {
+  if (Array.isArray(obj1) && Array.isArray(obj2)) return obj1.concat(obj2);
+  if (typeof obj1 === "object" && typeof obj2 === "object") {
+    const obj3 = {};
+    for (const key in obj1) obj3[key] = deepMerge2(obj1[key], obj2[key]);
+    for (const key in obj2) if (!(key in obj1)) obj3[key] = obj2[key]; // obj3[key] = deepMerge(undefined, obj2[key]);
+    return obj3;
+  }
+  return obj2 !== undefined ? obj2 : obj1;
 };
+const deepMerge = (object1, ...rest) => rest.reduce(deepMerge2, object1);
+
+const limit = (n) =>
+  n > 0 ? { Limit: n } : { Limit: -n, ScanIndexForward: false };
 
 const dehash = (s, hash = "#", escape = "\\") =>
   !s ? s : s.replace(escape, escape + escape).replace(hash, escape + "d");
@@ -103,6 +88,7 @@ const keyFactory =
     }
     return r.join("");
   };
+const sKey = keyFactory({});
 
 const expressionFactory =
   ({ prefix }) =>
@@ -133,7 +119,6 @@ const expressionFactory =
 
 const keyExp = expressionFactory({ prefix: "KeyCondition" });
 const filterExp = expressionFactory({ prefix: "Filter" });
-const sKey = keyFactory({});
 
 const udb = (schema) => {
   const db = {
@@ -146,16 +131,14 @@ const udb = (schema) => {
 
   const create = () => {
     const keys = db.indexes.primaryIndex;
-    const AttributeType = "S";
-    const keyType = ["HASH", "RANGE"];
     const params = {
       AttributeDefinitions: keys.map((name) => ({
         AttributeName: name,
-        AttributeType,
+        AttributeType: "S",
       })),
       KeySchema: keys.map((name, i) => ({
         AttributeName: name,
-        KeyType: keyType[i],
+        KeyType: ["HASH", "RANGE"][i],
       })),
       TableName: db.table,
       BillingMode: "PAY_PER_REQUEST",
@@ -176,6 +159,9 @@ const udb = (schema) => {
     for (const k of names || Object.keys(calc)) r[k] = calc[k](data);
     return r;
   };
+
+  const getKeys = (data, names) =>
+    getCalcs(data, names || Object.values(db.indexes).flat());
 
   const getPrimaryKey = (data) => getCalcs(data, db.indexes.primaryIndex);
 
@@ -244,11 +230,9 @@ const udb = (schema) => {
   };
 
   const queryOrScan = async (command, ...params) => {
-    const r = await dbDo(
-      command,
-      deepMerge({ TableName: db.table }, ...params)
-    );
-
+    const options = deepMerge({ TableName: db.table }, ...params);
+    // console.log(JSON.stringify({ options }, null, 2));
+    const r = await dbDo(command, options);
     const items = r.Items.map((item) => deCalc(unmarshall(item)));
     return [items, r];
   };
@@ -256,14 +240,15 @@ const udb = (schema) => {
   const query = (...params) => queryOrScan(QueryCommand, ...params);
   const scan = (...params) => queryOrScan(ScanCommand, ...params);
 
-  const withCalcs = (data) => maybeMap((d) => ({ ...d, ...getCalcs(d) }))(data);
-
-  const enrichWithCalcs = (f) => (data) => f(withCalcs(data));
-  // const inject = (f) => (data) => f(withCalcs(data));
-
+  /*
+  const mapObj = (f) => (o) =>
+  Object.fromEntries(Object.entries(o).map(([k, v]) => [k, f(v)]));
+  const maybeMap = (f) => (d) => Array.isArray(d) ? d.map(f) : f(d);
+  const prep = (data) => maybeMap((d) => ({ ...d, ...getCalcs(d) }))(data);
+  const enrichWithCalcs = (f) => (data) => f(prep(data));
   const conditions = mapObj(enrichWithCalcs)(schema.conditions);
-
-  // console.log({ conditions, schemas: schema.conditions });
+  const expression = (fn, data) => fn(prep(data));
+  */
 
   const update = async (data, params) =>
     dbDo(UpdateItemCommand, {
@@ -272,57 +257,11 @@ const udb = (schema) => {
       ...params,
     });
 
-  return {
-    get,
-    put,
-    del,
-    query,
-    scan,
-    update,
-    getCalcs,
-    conditions,
-    create,
-    dbDo,
-  };
+  const itemFunctions = { put, get, update, del, query, scan };
+  const attributeFunctions = { getCalcs, getKeys };
+  const tablefunctions = { dbDo, create };
+
+  return { ...itemFunctions, ...attributeFunctions, ...tablefunctions };
 };
 
-export { udb, sKey, keyExp, filterExp, expressionFactory, dehash };
-
-/*
-const attributes = (data) => {
-  const r = { knames: {}, vnames: {}, groupings: {} };
-  toArray(data).forEach((d) =>
-    Object.keys(d).forEach((k) => {
-      const kname = `#${k}`;
-      if (!r.groupings[k]) r.groupings[k] = { kname, vnames: [] };
-      const vname = `:${k}${r.groupings[k].vnames.length}`;
-      r.groupings[k].vnames.push(vname);
-      r.knames[kname] = k;
-      r.vnames[vname] = d[k];
-    })
-  );
-  return r;
-};
-
-const applyOp = (keyGroup, op) => {
-  const keyFunctions = {
-    beginsWith: (k, v) => `begins_with(${k}, ${v[0]})`,
-    between: (k, v) => `${k} BETWEEN ${v[0]} AND ${v[1]}`,
-  };
-  const binop = (k, o, v) => `${k} ${o} ${v[0]}`;
-
-  const { kname: kn, vnames: vn } = keyGroup;
-  if (["=", "<", ">", "<=", ">="].includes(op)) return binop(kn, op, vn);
-  if (keyFunctions[op]) return keyFunctions[op](kn, vn);
-};
-
-const keyCondition = (keys, ops = ["=", "beginsWith"]) => {
-  const { knames, vnames, groupings } = attributes(keys);
-  const exp = Object.values(groupings).map((g, i) => applyOp(g, ops[i]));
-  return {
-    KeyConditionExpression: exp.join(" AND "),
-    ExpressionAttributeNames: knames,
-    ExpressionAttributeValues: marshall(vnames),
-  };
-};
-*/
+export { udb, sKey, keyExp, filterExp, expressionFactory, limit };

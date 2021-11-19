@@ -2,7 +2,7 @@ import dbPromise from "../slib/db.js";
 import fromMarkdown from "../slib/fromMarkdown.js";
 import { getObject } from "@/slib/s3.js";
 import handle from "../slib/handle.js";
-import getRelatedPosts from "@/slib/getRelatedPosts.js";
+import findRelatedPosts from "@/slib/findRelatedPosts.js";
 
 export default async function postToDb(bucket, key) {
   const content = await getObject(bucket, key);
@@ -28,7 +28,7 @@ export default async function postToDb(bucket, key) {
 
   await new Promise((resolve) => setTimeout(resolve, 500));
   // console.log("getting related", { id });
-  const related = await getRelatedPosts({ ...item, tags: info.tags });
+  const related = await findRelatedPosts({ ...item, tags: info.tags });
   // eslint-disable-next-line no-unused-vars, no-shadow
   const strip = ({ tag, createdDate, heading, extension, _created, ...rest }) =>
     rest;

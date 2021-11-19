@@ -1,5 +1,5 @@
 import { udb, sKey, keyExp } from "../slib/udb.js";
-// import handle from "../slib/handle.js";
+import handle from "../slib/handle.js";
 
 // Get process.env config
 
@@ -23,9 +23,19 @@ if (accessKeyId || secretAccessKey)
 
 console.log({ ddbProps });
 
-// Main
+// Schema helper functions
 
 const seq = (s) => ("00000" + (parseInt(s) || 0)).slice(-6);
+const cascadePostTags = ({ postType, id, extension, title, tags }) => {
+  if (!tags) return [];
+  const entityType = "postTag";
+  return tags.split(",").map((untrimmedTag) => {
+    const tag = untrimmedTag.trim();
+    return { entityType, postType, tag, tags, title, id, extension };
+  });
+};
+
+// Schema
 
 const mySchema = {
   ddbProps,
@@ -46,26 +56,16 @@ const mySchema = {
         sk: ({ id }) => sKey`seq#${seq(id)}#post#${id}#`,
       },
       // Denormalise the item via cascade function
-      cascade: ({ postType, id, extension, title, tags }) => [
-        ...(!tags
-          ? []
-          : tags.split(",").map((tag) => ({
-              entityType: "postTag",
-              postType,
-              tag: tag.trim(),
-              tags,
-              title,
-              id,
-              extension,
-            }))),
-      ],
+      cascade: cascadePostTags,
     },
+    // One postTag Item for each post's tag
     postTag: {
       calc: {
         pk: ({ postType, tag }) => sKey`postType#${postType}#tag#${tag}`,
         sk: ({ id }) => sKey`seq#${seq(id)}#post#${id}#`,
       },
     },
+    // One relatedPost Item for each ordered pair of posts related by tag(s)
     relatedPost: {
       calc: {
         pk: ({ postType }) => sKey`relatedPost#${postType}`,
@@ -73,12 +73,9 @@ const mySchema = {
           sKey`seq#${seq(id)}#post#${id}#` +
           sKey`seq#${seq(relatedId)}#post#${relatedId}#`,
       },
-      /*
-      cascade: ({ id, relatedId, mirror, ...rest }) =>
-        mirror ? [] : [{ id: relatedId, relatedId: id, mirror: true, ...rest }],
-      */
     },
   },
+  /*
   conditions: {
     // returned in udb(schema).conditions enriched with calc attributes (eg pk/sk etc)
     all: (data) => keyExp`#pk = ${data.pk}`,
@@ -91,16 +88,18 @@ const mySchema = {
       IndexName: "gsi1",
     }),
   },
+  */
 };
 
 const initDb = async () => {
   // May need to create the table for fake db. Always return a Promise
   const d = udb(mySchema);
   if (fakeDynamoDB) {
-    console.log("Initialising Fake DynamoDB");
-    d.create().catch((e) => console.log(`Fake DynamoDB warning ${e}`));
-    // await 1000ms to allow table to be created
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    console.log("Initialising fake DynamoDB");
+    const err = await handle(d.create())[1];
+    if (err && err.code === "ResourceInUseException") return d; // it's ready
+    if (err) throw new Error(`Cannot open fake DynamoDB because ${err}`);
+    await new Promise((resolve) => setTimeout(resolve, 600)); // await creation
   }
   return d;
 };

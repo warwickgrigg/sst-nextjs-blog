@@ -1,37 +1,42 @@
 import Markdown from "markdown-to-jsx";
 import db from "@/slib/db.js";
-// import { filterExp } from "@/slib/udb.js";
+import { keyExp, limit /*, filterExp*/ } from "@/slib/udb.js";
 import fromMarkdown from "@/slib/fromMarkdown.js";
 import { getObject } from "slib/s3.js"; // can't get Slib/s3.js to alias
 import handle from "@/slib/handle.js";
-import getRelatedPosts from "@/slib/getRelatedPosts.js";
+// import getRelatedPosts from "@/slib/getRelatedPosts.js";
 
-const postDef = { entityType: "post", postType: "blog" };
-const prefix = `${postDef.postType}/`;
+const postType = "blog";
 
-const getPostRefs = async () => {
-  const { conditions: c, query } = await db;
-  const end10Exp = { ...c.all(postDef), Limit: 10, ScanIndexForward: false };
-  return query(end10Exp);
+const getRelatedPosts = async ({ id }) => {
+  const { getKeys, query } = await db;
+  const entityType = "relatedPost";
+  const { pk, sk } = getKeys({ entityType, postType, id, relatedId: "" });
+  const condition = keyExp`#pk = ${pk} AND #sk begins_with ${sk.slice(0, -1)}`;
+  const ProjectionExpression = "title, relatedId";
+  return query(condition, ProjectionExpression, limit(-10));
+};
+
+const getRecentPosts = async () => {
+  const { getKeys, query } = await db;
+  const { pk } = getKeys({ entityType: "post", postType });
+  return query(keyExp`#pk = ${pk}`, limit(-10));
 };
 
 const getPost = async (id) => {
   const testVar = process.env.TEST_VAR;
   const bucketName =
     process.env.BUCKET_NAME_FOR_LOCALHOST || process.env.BUCKET_NAME;
-  const objectName = `${prefix}${id}.md`;
+  const objectName = `${postType}/${id}.md`;
   console.log({ bucketName, objectName, testVar });
   if (!bucketName || bucketName.slice(0, 3) === "{{ ") return; // fail safe
   const md = await getObject(bucketName, objectName);
   const post = fromMarkdown(md);
-  console.log({
-    related: await getRelatedPosts({ ...post, postType: "blog" }),
-  });
   return post;
 };
 
 export async function getStaticPaths() {
-  const [r, err] = await handle(getPostRefs());
+  const [r, err] = await handle(getRecentPosts());
 
   if (err) throw new Error(`Could not get post paths because ${err}`);
   const [refs] = r;
@@ -41,11 +46,12 @@ export async function getStaticPaths() {
 
 export async function getStaticProps({ params }) {
   const post = await getPost(params.id);
-  return post ? { props: post } : { notFound: true };
+  const [related = []] = await getRelatedPosts(post);
+  return post ? { props: { post, relatedPosts } } : { notFound: true };
 }
 
 // eslint-disable-next-line no-unused-vars
-const Post = ({ heading, createdDate, writtenBy, img, content }) => (
+const PostBody = ({ heading, createdDate, writtenBy, img, content }) => (
   <>
     <h1> {heading} </h1>
 
