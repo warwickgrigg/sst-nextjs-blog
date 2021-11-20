@@ -9,21 +9,31 @@ import Post from "../../components/post.js";
 
 const postType = "blog";
 
+/*
 const getRelatedPosts = async (id) => {
   const { getKeys, query } = await db;
   const entityType = "relatedPost";
   const { pk, sk } = getKeys({ entityType, postType, id, relatedId: "" });
   const skStart = sk.split("#").slice(0, 5).join("#");
   const condition = keyExp`#pk = ${pk} AND begins_with(#sk, ${skStart})`;
-  const ProjectionExpression = "title, relatedId";
-  return query(condition, /* ProjectionExpression, */ limit(-10));
+  // const ProjectionExpression = "title, relatedId";
+  return query(condition,  ProjectionExpression,  limit(-10));
 };
+*/
 
-const getRecentPosts = async (excludeId) => {
-  const { getKeys, query } = await db;
-  const filter = excludeId === undefined ? {} : filterExp`id<>${excludeId}`;
-  const { pk } = getKeys({ entityType: "post", filter, postType });
-  return query(keyExp`#pk = ${pk}`, limit(-10));
+const getInfo = async (id) =>
+  (await db).get({ entityType: "post", postType, id });
+
+const getRecentPosts = async () => {
+  let memcached;
+  const getRecentPostsFromDB = async (/* excludeId */) => {
+    const { getKeys, query } = await db;
+    // const filter = excludeId === undefined ? {} : filterExp`id<>${excludeId}`;
+    const { pk } = getKeys({ entityType: "post", postType });
+    return query(keyExp`#pk = ${pk}`, limit(-10));
+  };
+  if (!memcached) memcached = getRecentPostsFromDB();
+  return memcached;
 };
 
 const getPost = async (id) => {
@@ -47,18 +57,31 @@ export async function getStaticPaths() {
 
 export async function getStaticProps({ params: { id } }) {
   const [r, err] = await handle(
-    Promise.all([getPost(id), getRelatedPosts(id), getRecentPosts(id)])
+    Promise.all([
+      getPost(id),
+      getRecentPosts(id),
+      getInfo(id) /*getRelatedPosts(id)*/,
+    ])
   );
   if (err) {
     console.error(`Could not get post info because ${err}`);
     return { notFound: true };
   }
-  const [post, [related], [recentPosts]] = r;
+  const [post, [recent], [info] /*, [related] */] = r;
 
+  const recentPosts = recent.filter(({ id: recentId }) => recentId !== id);
+
+  const relatedPosts = info.relatedPosts.map((json) => {
+    // eslint-disable-next-line no-shadow
+    const [id, title] = JSON.parse(json);
+    return { id, title };
+  });
+  /*
   const relatedPosts = related.map((item) => ({
     id: item.relatedId,
     title: item.title,
   }));
+  */
 
   return post
     ? { props: { ...post, relatedPosts, recentPosts } }

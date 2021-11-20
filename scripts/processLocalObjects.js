@@ -10,6 +10,7 @@ import handle from "@/slib/handle.js";
   const list = await listObjects(bucketName, prefix);
   // const objects = await Promise.all(list.map((o) => getObject(bucketName, o)));
   // console.log({ list, objects });
+  /*
   await Promise.all(
     list.map(async (o) => {
       const [data, objErr] = await handle(postToDb(bucketName, o));
@@ -18,5 +19,10 @@ import handle from "@/slib/handle.js";
       return data;
     })
   );
+  */
+  for (const item of list) {
+    const [, err] = await handle(postToDb(bucketName, item));
+    if (err) throw new Error(`Cannot process object ${item} because ${err}`);
+  }
   console.log("Done");
 })();

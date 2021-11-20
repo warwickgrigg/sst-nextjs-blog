@@ -30,7 +30,7 @@ let onResolvePlugin = {
 };
 //
 require("esbuild").build({
-  entryPoints: ["utils/processLocalObjects.js"],
+  entryPoints: ["scripts/processLocalObjects.js"],
   bundle: true,
   platform: "node",
   plugins: [onResolvePlugin],

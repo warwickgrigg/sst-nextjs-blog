@@ -22,9 +22,6 @@ export default async function postToDb(bucket, key) {
   const item = { entityType, postType, id, extension, title, heading, tags };
   if (createdDate)
     item.createdDate = new Date(Date.parse(createdDate)).toISOString();
-  const db = await dbPromise;
-  const [written, err] = await handle(db.put([item]));
-  if (err) throw new Error(`Error putting item ${item} because ${err}`);
 
   await new Promise((resolve) => setTimeout(resolve, 500));
   // console.log("getting related", { id });
@@ -32,20 +29,24 @@ export default async function postToDb(bucket, key) {
   // eslint-disable-next-line no-unused-vars, no-shadow
   const strip = ({ tag, createdDate, heading, extension, _created, ...rest }) =>
     rest;
-  updateExpression`SET #relatedPosts = list_append(if_not_exists(#ri, ${[]}), ${[
-    "id1",
-    "id2",
-  ]})`;
+
+  // updateExpression`SET #relatedPosts = list_append(if_not_exists(#ri, ${[]}), ${[ "id1", "id2", ]})`;
   const relatedtoWrite = related.flatMap((relatedPost) => {
     const commonTags = relatedPost.commonTags.join(",");
-    const common = { entityType: "relatedPost", commonTags };
+    const attributes = { entityType: "relatedPost", commonTags };
     return [
-      { ...strip(relatedPost), ...common, id, relatedId: relatedPost.id },
-      { ...strip(item), ...common, id: relatedPost.id, relatedId: id },
+      { ...strip(relatedPost), ...attributes, id, relatedId: relatedPost.id },
+      { ...strip(item), ...attributes, id: relatedPost.id, relatedId: id },
     ];
   });
 
-  if (relatedtoWrite.length) await db.put(relatedtoWrite);
+  item.relatedPosts = related.flatMap((relatedPost) =>
+    JSON.stringify([relatedPost.id, relatedPost.title])
+  );
+  const { put } = await dbPromise;
+  // if (relatedtoWrite.length) await db.put(relatedtoWrite);
+  const [written, err] = await handle(put([...relatedtoWrite, item]));
+  if (err) throw new Error(`Error putting item ${item} because ${err}`);
 
   return [item, written[0]];
 }
