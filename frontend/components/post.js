@@ -6,15 +6,18 @@ import PostLinks from "./postLinks";
 
 const Layout = ({ children }) => <div>{children}</div>;
 
-const Post = ({ recentPosts, relatedPosts, head, ...post }) =>
-  !head ? null : (
+const Post = ({ recentPosts, relatedPosts, head, ...post }) => {
+  console.log({ post });
+  return (
     <Layout>
-      <Head>
-        <title>{head.title}</title>
-        {Object.entries(head.meta).map(([property, content]) => (
-          <meta {...{ property, content }} key={property} />
-        ))}
-      </Head>
+      {!!head && (
+        <Head>
+          <title>{head.title}</title>
+          {Object.entries(head.meta).map(([property, content]) => (
+            <meta {...{ property, content }} key={property} />
+          ))}
+        </Head>
+      )}
       <div className="flex row justified container padded">
         <div
           className="flex column"
@@ -33,5 +36,6 @@ const Post = ({ recentPosts, relatedPosts, head, ...post }) =>
       </div>
     </Layout>
   );
+};
 
 export default Post;

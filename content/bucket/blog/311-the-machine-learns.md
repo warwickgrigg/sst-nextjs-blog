@@ -38,10 +38,8 @@ Threats before the Opportunities. Someone, somewhere is thinking of using Machin
 Learning to do what your business does, better and at a
 fraction of the price. For Amazon, Google, Facebook, Uber, Netflix, Tesla
 and thousands of venture capital backed start-ups, it’s in their business
-DNA. Driving cars: yes, you see that on TV. Cutting hair
-
-- yes, why ever not. They’ll do what you do, better
-  and at a lower price, sooner than you think.
+DNA. Driving cars: yes, you see that on TV. Cutting hair - yes, why ever not.
+They’ll do what you do, better and at a lower price, sooner than you think.
 
 The Opportunity with the biggest prize is to become the leader
 in applying Machine Learning to your field, potentially dominating the market.
@@ -66,9 +64,7 @@ AWS for example:
   text, scenes, and activities in images and videos, as well as
   detect any inappropriate content,
 - [Lex](https://aws.amazon.com/lex/) is for building conversational interfaces using voice and text,
-
 - [Personalize](https://aws.amazon.com/personalize/) is for building real-time personalized recommendations for your customers,
-
 - [Translate](https://aws.amazon.com/translate/) is a neural machine translation service for fast, high-quality,
   and affordable language translation
 - [Polly's](https://aws.amazon.com/polly/) Neural Text-to-Speech (NTTS) turns text into natural sounding human

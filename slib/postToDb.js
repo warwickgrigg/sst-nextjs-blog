@@ -32,6 +32,10 @@ export default async function postToDb(bucket, key) {
   // eslint-disable-next-line no-unused-vars, no-shadow
   const strip = ({ tag, createdDate, heading, extension, _created, ...rest }) =>
     rest;
+  updateExpression`SET #relatedPosts = list_append(if_not_exists(#ri, ${[]}), ${[
+    "id1",
+    "id2",
+  ]})`;
   const relatedtoWrite = related.flatMap((relatedPost) => {
     const commonTags = relatedPost.commonTags.join(",");
     const common = { entityType: "relatedPost", commonTags };

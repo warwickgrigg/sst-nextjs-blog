@@ -10,7 +10,7 @@
     "remove": "sst remove",
     "dynamoSandbox": "dynalite",
     "dynamoSandboxGUI": "DYNAMO_ENDPOINT=http://localhost:4567 dynamodb-admin",
-    "processLocalObjects": "node utils/withAliasProcessLocalObjects.js | FAKE_DDB=true node",
+    "processLocalObjects": "node scripts/withAliasProcessLocalObjects.js | FAKE_DDB=true node",
     "superseded-dynamoSandboxData": "AWS_ACCESS_KEY_ID=fake AWS_SECRET_ACCESS_KEY=fake aws --endpoint-url='http://127.0.0.1:4567' dynamodb list-tables",
     "superseded-s3Sandbox": "s3rver -d ./s3rverData/ --configure-bucket mybucket",
     "superseded-s3SandboxData": "AWS_ACCESS_KEY_ID=S3RVER AWS_SECRET_ACCESS_KEY=S3RVER aws --endpoint-url='http://127.0.0.1:4568' s3 cp  ./content/bucket/ s3://mybucket/ --recursive"

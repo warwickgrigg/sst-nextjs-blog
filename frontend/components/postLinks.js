@@ -1,5 +1,5 @@
 // import Lnk from "./lnk";
-const Lnk = ({ childen }) => <div>{children}</div>;
+const Lnk = ({ children }) => <div>{children}</div>;
 
 const PostLinks = ({ recentPosts, relatedPosts }) => (
   <>

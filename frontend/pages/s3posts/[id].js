@@ -1,6 +1,6 @@
 import Markdown from "markdown-to-jsx";
 import db from "@/slib/db.js";
-import { keyExp, limit /*, filterExp*/ } from "@/slib/udb.js";
+import { keyExp, limit, filterExp } from "@/slib/udb.js";
 import fromMarkdown from "@/slib/fromMarkdown.js";
 import { getObject } from "slib/s3.js"; // can't get Slib/s3.js to alias
 import handle from "@/slib/handle.js";
@@ -9,7 +9,7 @@ import Post from "../../components/post.js";
 
 const postType = "blog";
 
-const getRelatedPosts = async ({ id }) => {
+const getRelatedPosts = async (id) => {
   const { getKeys, query } = await db;
   const entityType = "relatedPost";
   const { pk, sk } = getKeys({ entityType, postType, id, relatedId: "" });
@@ -19,9 +19,10 @@ const getRelatedPosts = async ({ id }) => {
   return query(condition, /* ProjectionExpression, */ limit(-10));
 };
 
-const getRecentPosts = async () => {
+const getRecentPosts = async (excludeId) => {
   const { getKeys, query } = await db;
-  const { pk } = getKeys({ entityType: "post", postType });
+  const filter = excludeId === undefined ? {} : filterExp`id<>${excludeId}`;
+  const { pk } = getKeys({ entityType: "post", filter, postType });
   return query(keyExp`#pk = ${pk}`, limit(-10));
 };
 
@@ -40,21 +41,25 @@ const getPost = async (id) => {
 export async function getStaticPaths() {
   const [r, err] = await handle(getRecentPosts());
   if (err) throw new Error(`Could not get post paths because ${err}`);
-  const paths = r[0].slice(0, 10).map(({ id }) => ({ params: { id } }));
+  const paths = r[0].map(({ id }) => ({ params: { id } }));
   return { paths, fallback: "blocking" };
 }
 
-export async function getStaticProps({ params }) {
-  const post = await getPost(params.id);
-  const [related = [[]], relErr] = await handle(getRelatedPosts(post));
-  const relatedPosts = related[0].map(({ relatedId: id, title }) => ({
-    id,
-    title,
+export async function getStaticProps({ params: { id } }) {
+  const [r, err] = await handle(
+    Promise.all([getPost(id), getRelatedPosts(id), getRecentPosts(id)])
+  );
+  if (err) {
+    console.error(`Could not get post info because ${err}`);
+    return { notFound: true };
+  }
+  const [post, [related], [recentPosts]] = r;
+
+  const relatedPosts = related.map((item) => ({
+    id: item.relatedId,
+    title: item.title,
   }));
 
-  const [recent = [[]], recErr] = await handle(getRecentPosts(post));
-  const recentPosts = recent[0];
-  console.log({ related, relErr, recentPosts, recErr });
   return post
     ? { props: { ...post, relatedPosts, recentPosts } }
     : { notFound: true };
