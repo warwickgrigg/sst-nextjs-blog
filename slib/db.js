@@ -24,14 +24,15 @@ if (accessKeyId || secretAccessKey)
 // Schema helper functions
 
 const seq = (s) => ("00000" + (parseInt(s) || 0)).slice(-6);
-const cascadePostTags = ({ postType, id, extension, title, tags }) => {
-  if (!tags) return [];
-  const entityType = "postTag";
-  return tags.split(",").map((untrimmedTag) => {
-    const tag = untrimmedTag.trim();
-    return { entityType, postType, tag, tags, title, id, extension };
-  });
-};
+const cascadePostTags = ({ postType, id, extension, title, tags }) =>
+  tags.map((tag) => ({
+    entityType: "postTag",
+    postType,
+    tag,
+    title,
+    id,
+    extension,
+  }));
 
 // Schema
 

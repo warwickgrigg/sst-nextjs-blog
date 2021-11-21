@@ -21,6 +21,8 @@ const getRelatedPosts = async (id) => {
 };
 */
 
+const maxRecentPostsToQuery = 10;
+
 const getInfo = async (id) =>
   (await db).get({ entityType: "post", postType, id });
 
@@ -30,7 +32,7 @@ const getRecentPosts = async () => {
     const { getKeys, query } = await db;
     // const filter = excludeId === undefined ? {} : filterExp`id<>${excludeId}`;
     const { pk } = getKeys({ entityType: "post", postType });
-    return query(keyExp`#pk = ${pk}`, limit(-10));
+    return query(keyExp`#pk = ${pk}`, limit(-maxRecentPostsToQuery));
   };
   if (!memcached) memcached = getRecentPostsFromDB();
   return memcached;
@@ -71,17 +73,10 @@ export async function getStaticProps({ params: { id } }) {
 
   const recentPosts = recent.filter(({ id: recentId }) => recentId !== id);
 
-  const relatedPosts = info.relatedPosts.map((json) => {
-    // eslint-disable-next-line no-shadow
-    const [id, title] = JSON.parse(json);
-    return { id, title };
-  });
-  /*
-  const relatedPosts = related.map((item) => ({
-    id: item.relatedId,
-    title: item.title,
+  const relatedPosts = info.relatedTitle.map((title, i) => ({
+    title,
+    id: info.relatedId[i],
   }));
-  */
 
   return post
     ? { props: { ...post, relatedPosts, recentPosts } }

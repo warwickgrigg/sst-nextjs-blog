@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "sst-env -- next dev",
-    "local": "next dev",
+    "local": "FAKE_DDB=true S3FS_PATH=../content BUCKET_NAME=bucket next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint"

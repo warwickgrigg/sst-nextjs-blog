@@ -231,7 +231,7 @@ const udb = (schema) => {
 
   const queryOrScan = async (command, ...params) => {
     const options = deepMerge({ TableName: db.table }, ...params);
-    console.log(JSON.stringify({ options }, null, 2));
+    // console.log(JSON.stringify({ options }, null, 2));
     const r = await dbDo(command, options);
     const items = r.Items.map((item) => deCalc(unmarshall(item)));
     return [items, r];

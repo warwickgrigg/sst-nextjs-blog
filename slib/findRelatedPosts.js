@@ -1,31 +1,41 @@
 import db from "@/slib/db.js";
-import { /* filterExp, */ limit, keyExp } from "@/slib/udb.js";
+import { limit, keyExp } from "@/slib/udb.js";
 import handle from "@/slib/handle.js";
 
 // const pipe = (...fns) => (x) => fns.reduce((v, f) => f(v), x);
 
+const maxPostsPerTag = 5;
+
 export default async function findRelatedPosts({ id, postType, tags = [] }) {
-  if (!tags) return [];
-  const { /* conditions,  prep, */ getKeys, query } = await db;
+  if (!tags.length) return [];
+  const { getKeys, query } = await db;
+
+  // For each tag query for related posts preceding this post
+
   const byTag = await Promise.all(
     tags.map(async (tag) => {
-      //const keySpec = { entityType: "postTag", postType, id, tag };
-      const { pk, sk } = getKeys({ entityType: "postTag", postType, id, tag });
+      const { pk, sk } = getKeys({ entityType: "postTag", postType, tag, id });
+      // const condition = keyExp`#pk = ${pk} AND #sk <> ${sk}`; // inc. future
       const condition = keyExp`#pk = ${pk} AND #sk < ${sk}`;
-      const [r, err] = await handle(query(condition, limit(-10)));
+      const [r, err] = await handle(query(condition, limit(-maxPostsPerTag)));
       if (err)
         throw new Error(
           `Could not findRelatedPosts tagged ${tag} for ${id}, because ${err}`
         );
-      // console.log({ r });
       return r[0];
     })
   );
   // console.log({ byTag });
+
+  // Flatten, combine by post and sort by descending number of ftags in common
+
   const byPost = byTag.flat().reduce((a, c) => {
-    if (!a[c.id]) a[c.id] = { ...c, commonTags: [c.tag] };
-    else a[c.id].commonTags.push(c.tag);
+    if (!a[c.id]) a[c.id] = { ...c, tags: [c.tag] };
+    else a[c.id].tags.push(c.tag);
     return a;
   }, {});
-  return Object.values(byPost);
+
+  // eslint-disable-next-line no-shadow
+  const r = Object.values(byPost).sort(({ tags }) => -tags.length);
+  return r;
 }
